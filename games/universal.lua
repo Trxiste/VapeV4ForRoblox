@@ -5404,13 +5404,10 @@ end)
 run(function()
 	local SessionInfo
 	local FontOption
-	local Hide
 	local TextSize
 	local BorderColor
 	local Title
 	local TitleOffset = {}
-	local Custom
-	local CustomBox
 	local infoholder
 	local infolabel
 	local infostroke
@@ -5444,27 +5441,9 @@ run(function()
 						if Title.Enabled then
 							stuff[1] = TitleOffset.Enabled and '<b>Session Info</b>\n<font size="4"> </font>' or '<b>Session Info</b>'
 						end
-	
 						for i, v in vape.Libraries.sessioninfo.Objects do
-							stuff[v.Index] = not table.find(Hide.ListEnabled, i) and i..': '..v.Function(v.Value) or false
+							stuff[v.Index] = i..': '..v.Function(v.Value)
 						end
-	
-						if #Hide.ListEnabled > 0 then
-							local key, val
-							repeat
-								local oldkey = key
-								key, val = next(stuff, key)
-								if val == false then
-									table.remove(stuff, key)
-									key = oldkey
-								end
-							until not key
-						end
-	
-						if Custom.Enabled then
-							table.insert(stuff, CustomBox.Value)
-						end
-	
 						if not Title.Enabled then
 							table.remove(stuff, 1)
 						end
@@ -5482,14 +5461,6 @@ run(function()
 	FontOption = SessionInfo:CreateFont({
 		Name = 'Font',
 		Blacklist = 'Arial'
-	})
-	Hide = SessionInfo:CreateTextList({
-		Name = 'Blacklist',
-		Tooltip = 'Name of entry to hide.',
-		Icon = getcustomasset('newvape/assets/new/blockedicon.png'),
-		Tab = getcustomasset('newvape/assets/new/blockedtab.png'),
-		TabSize = UDim2.fromOffset(21, 16),
-		Color = Color3.fromRGB(250, 50, 56)
 	})
 	SessionInfo:CreateColorSlider({
 		Name = 'Background Color',
@@ -5535,17 +5506,6 @@ run(function()
 			infostroke.Enabled = callback
 			BorderColor.Object.Visible = callback
 		end
-	})
-	Custom = SessionInfo:CreateToggle({
-		Name = 'Add custom text',
-		Function = function(enabled)
-			CustomBox.Object.Visible = enabled
-		end
-	})
-	CustomBox = SessionInfo:CreateTextBox({
-		Name = 'Custom text',
-		Darker = true,
-		Visible = false
 	})
 	infoholder = Instance.new('Frame')
 	infoholder.BackgroundColor3 = Color3.new()
@@ -6290,7 +6250,7 @@ run(function()
 		end
 	})
 end)
-	
+
 run(function()
 	local StaffDetector
 	local Mode
@@ -6454,7 +6414,2500 @@ run(function()
 		Tooltip = 'Lets you stay ingame without getting kicked'
 	})
 end)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+vape.Categories.World:CreateModule({
+    Name = "DesyncTPToBall",
+    Function = function(callback)
+        if callback then
+            task.spawn(function()
+                repeat task.wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local ball = Workspace:FindFirstChild("Temp") and Workspace.Temp:FindFirstChild("Ball")
+
+                if hrp and ball then
+                    local start = hrp.Position
+                    local target = (ball.CFrame + Vector3.new(0, 5, 0)).Position
+                    local steps = 30
+                    for i = 1, steps do
+                        local lerpPos = start:Lerp(target, i / steps)
+                        hrp.CFrame = CFrame.new(lerpPos)
+                        task.wait(0.03)
+                    end
+                else
+                    warn("DesyncTPToBall: Missing HRP or Ball.")
+                end
+            end)
+        end
+    end,
+    Tooltip = "Stepwise teleport to avoid anti-teleport"
+})	
+
+run(function()
+	local Players = game:GetService("Players")
+	local UIS = game:GetService("UserInputService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local Lighting = game:GetService("Lighting")
+	local TweenService = game:GetService("TweenService")
+	local LocalPlayer = Players.LocalPlayer
+	local Camera = workspace.CurrentCamera
+
+	local TEMP_FOLDER = workspace:WaitForChild("Temp")
+	local BALL_NAME = "Ball"
+	local ANIMATION_ID = "rbxassetid://18853355212"
+
+	local KickRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Kick")
+	local SetCollisionRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("SetCollisionGroup")
+	local PowerShotRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PowerShot")
+
+	local KICK_PARAMS_BASE = {
+		Vector3.new(),
+		nil,
+		false,
+		true,
+		800.5,
+		"Right",
+		CFrame.new(262.50360107421875, 12.629940032958984, -18.665719985961914,
+			0.9999999403953552, 1.2247008740473575e-08, 0.00030110677471384406,
+			-1.2247551417488012e-08, 1, 1.8031141024721364e-09,
+			-0.00030110677471384406, -1.8068019302930338e-09, 0.9999999403953552)
+	}
+
+	local COLLISION_PARAMS = {0.917, "NoCharCollide"}
+
+	local function loadAnimation()
+		local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+		local humanoid = character:WaitForChild("Humanoid")
+		local animator = humanoid:WaitForChild("Animator")
+		
+		local animation = Instance.new("Animation")
+		animation.AnimationId = ANIMATION_ID
+		
+		return animator, animation
+	end
+
+	local animator, animation = loadAnimation()
+	LocalPlayer.CharacterAdded:Connect(function(character)
+		character:WaitForChild("Humanoid")
+		animator, animation = loadAnimation()
+	end)
+
+	local function playPowerShotAnimation()
+		if animator and animation then
+			local track = animator:LoadAnimation(animation)
+			track:Play()
+			delay(0.8, function()
+				if track.IsPlaying then
+					track:Stop()
+				end
+			end)
+			return track
+		end
+		return nil
+	end
+
+	local function applyDelayedKickBlur()
+		local blur = Lighting:FindFirstChild("KickBlur") or Instance.new("BlurEffect")
+		blur.Name = "KickBlur"
+		blur.Size = 0
+		blur.Parent = Lighting
+
+		blur.Size = 20
+		local tween = TweenService:Create(blur, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Size = 0})
+		tween:Play()
+		tween.Completed:Connect(function()
+			blur:Destroy()
+		end)
+	end
+
+	local function executePowerKick()
+		local ball = TEMP_FOLDER:FindFirstChild(BALL_NAME)
+		if not ball then return end
+
+		playPowerShotAnimation()
+		task.delay(0.25, applyDelayedKickBlur)
+		task.wait(0.2)
+
+		local char = LocalPlayer.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+
+		local camVec = Camera.CFrame.LookVector
+		local horizontalDirection = Vector3.new(camVec.X, 0, camVec.Z).Unit
+		local kickDirection = horizontalDirection * 170
+
+		local kickArgs = {
+			kickDirection,
+			ball,
+			KICK_PARAMS_BASE[3],
+			KICK_PARAMS_BASE[4],
+			KICK_PARAMS_BASE[5],
+			KICK_PARAMS_BASE[6],
+			KICK_PARAMS_BASE[7]
+		}
+
+		task.wait(0.05)
+		SetCollisionRemote:FireServer(unpack(COLLISION_PARAMS))
+		PowerShotRemote:FireServer()
+		KickRemote:FireServer(unpack(kickArgs))
+	end
+
+	local module
+	local rightClickConnectionBegin
+	local rightClickConnectionEnd
+
+	module = vape.Categories.Combat:CreateModule({
+		Name = "SuperShot",
+		Tooltip = "KABOOM (PS ONLY)",
+		Default = false,
+		Function = function(callback)
+			if callback then
+				rightClickConnectionBegin = UIS.InputBegan:Connect(function(input, gpe)
+					if input.UserInputType == Enum.UserInputType.MouseButton2 and not gpe then
+						local start = tick()
+						local active = true
+						task.delay(0.8, function()
+							if active and (tick() - start) >= 0.8 then
+								executePowerKick()
+							end
+						end)
+					end
+				end)
+
+				rightClickConnectionEnd = UIS.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton2 then
+					end
+				end)
+			else
+				if rightClickConnectionBegin then rightClickConnectionBegin:Disconnect() end
+				if rightClickConnectionEnd then rightClickConnectionEnd:Disconnect() end
+			end
+		end
+	})
+end)
+
+run(function()
+    local TEAM_KEYWORDS = {
+        ["spain"] = "Spain",
+        ["mexico"] = "Mexico",
+        ["romania"] = "Romania",
+        ["roma"] = "Romania",
+        ["germany"] = "Germany",
+        ["croatia"] = "Croatia",
+        ["france"] = "France",
+        ["usa"] = "USA",
+        ["denmark"] = "Denmark",
+        ["netherlands"] = "Netherlands",
+        ["bosnia"] = "Bosnia",
+        ["morocco"] = "Morocco",
+        ["sweden"] = "Sweden",
+        ["argentina"] = "Argentina",
+        ["belgium"] = "Belgium",
+        ["portugal"] = "Portugal",
+        ["wales"] = "Wales",
+        ["scotland"] = "Scotland",
+        ["south korea"] = "SouthKorea",
+        ["brazil"] = "Brazil",
+        ["canada"] = "Canada",
+        ["england"] = "England",
+        ["japan"] = "Japan",
+        ["poland"] = "Poland",
+        ["uruguay"] = "Uruguay",
+        ["italy"] = "Italy",
+        ["ac milan"] = "ACMilan",
+        ["city"] = "ManCity",
+        ["dortmund"] = "Dortmund",
+        ["miami"] = "InterMiami",
+        ["lazio"] = "Lazio",
+        ["newcastle"] = "Newcastle",
+        ["munich"] = "Bayern",
+        ["chelsea"] = "Chelsea",
+        ["b04"] = "Bayer04",
+        ["inter milan"] = "InterMilan",
+        ["fiorentina"] = "Fiorentina",
+        ["paris"] = "PSG",
+        ["manchester"] = "ManUnited",
+        ["napoli"] = "Napoli",
+        ["vasco"] = "VascoDaGama",
+        ["liverpool"] = "Liverpool",
+        ["atletico"] = "AtleticoMadrid",
+        ["real madrid"] = "RealMadrid",
+        ["sounders"] = "SeattleSounders",
+        ["tottenham"] = "Tottenham",
+        ["barcelona"] = "Barcelona",
+        ["ajax"] = "Ajax",
+        ["juventus"] = "Juventus",
+        ["arsenal"] = "Arsenal"
+    }
+
+local OUTFITS = {
+    Romania = {Tracksuit = "rbxassetid://18652449183", Pants = "rbxassetid://18640261775", VertexColor = Vector3.new(0.494, 0.086, 0.125)},
+    ACMilan = {Tracksuit = "rbxassetid://18640607686", Pants = "rbxassetid://18640605629", VertexColor = Vector3.new(0.04, 0.04, 0.04)},
+    Spain = {Tracksuit = "rbxassetid://18672704660", Pants = "rbxassetid://18672709249", VertexColor = Vector3.new(0.514, 0, 0)},
+    Mexico = {Tracksuit = "rbxassetid://15486061492", Pants = "rbxassetid://15107181778", VertexColor = Vector3.new(0.043, 0.478, 0.313)},
+    ManCity = {Tracksuit = "rbxassetid://16306240157", Pants = "rbxassetid://16306238253", VertexColor = Vector3.new(0.533, 0.714, 0.878)},
+    Dortmund = {Tracksuit = "rbxassetid://15106415459", Pants = "rbxassetid://15059672079", VertexColor = Vector3.new(0.2, 0.2, 0.2)},
+    InterMiami = {Tracksuit = "rbxassetid://15106547920", Pants = "rbxassetid://15081726497", VertexColor = Vector3.new(0.1, 0.1, 0.1)},
+    Lazio = {Tracksuit = "rbxassetid://18652444931", Pants = "rbxassetid://18640380785", VertexColor = Vector3.new(0.98, 0.98, 0.98)},
+    Newcastle = {Tracksuit = "rbxassetid://18897656858", Pants = "rbxassetid://18897654349", VertexColor = Vector3.new(1, 1, 1)},
+    Germany = {Tracksuit = "rbxassetid://18652438606", Pants = "rbxassetid://18640099509", VertexColor = Vector3.new(0.99, 0.99, 0.99)},
+    Bayern = {Tracksuit = "rbxassetid://15441534187", Pants = "rbxassetid://15059692233", VertexColor = Vector3.new(0.043, 0.164, 0.364)},
+    Croatia = {Tracksuit = "rbxassetid://15106908245", Pants = "rbxassetid://15106875766", VertexColor = Vector3.new(0.113, 0.207, 0.38)},
+    Chelsea = {Tracksuit = "rbxassetid://18640180437", Pants = "rbxassetid://18640176256", VertexColor = Vector3.new(0.2, 0.2, 0.667)},
+    Bayer04 = {Tracksuit = "rbxassetid://18652446397", Pants = "rbxassetid://18640512373", VertexColor = Vector3.new(0.05, 0.05, 0.05)},
+    InterMilan = {Tracksuit = "rbxassetid://18652440064", Pants = "rbxassetid://18640165362", VertexColor = Vector3.new(0.11, 0.294, 0.541)},
+    Uruguay = {Tracksuit = "rbxassetid://18640285532", Pants = "rbxassetid://18820416678", VertexColor = Vector3.new(0.05, 0.05, 0.05)},
+    Fiorentina = {Tracksuit = "rbxassetid://18652435948", Pants = "rbxassetid://18640555243", VertexColor = Vector3.new(0.278, 0.122, 0.404)},
+    PSG = {Tracksuit = "rbxassetid://15106626229", Pants = "rbxassetid://15059655263", VertexColor = Vector3.new(0.086, 0.113, 0.258)},
+    ManUnited = {Tracksuit = "rbxassetid://15106575646", Pants = "rbxassetid://16571736772", VertexColor = Vector3.new(0.472, 0.08, 0.125)},
+    Napoli = {Tracksuit = "rbxassetid://18640210637", Pants = "rbxassetid://18640207548", VertexColor = Vector3.new(1, 1, 1)},
+    VascoDaGama = {Tracksuit = "rbxassetid://18640431111", Pants = "rbxassetid://18640428921", VertexColor = Vector3.new(0.96, 0.96, 0.96)},
+    France = {Tracksuit = "rbxassetid://18652437169", Pants = "rbxassetid://18640440646", VertexColor = Vector3.new(0.03, 0.03, 0.03)},
+    USA = {Tracksuit = "rbxassetid://18640129241", Pants = "rbxassetid://18640124766", VertexColor = Vector3.new(0.078, 0.067, 0.639)},
+    Denmark = {Tracksuit = "rbxassetid://18897824574", Pants = "rbxassetid://18897822242", VertexColor = Vector3.new(0.6, 0.11, 0.125)},
+    Netherlands = {Tracksuit = "rbxassetid://15107258795", Pants = "rbxassetid://15107209764", VertexColor = Vector3.new(0.913, 0.45, 0.074)},
+    Bosnia = {Tracksuit = "rbxassetid://18898334587", Pants = "rbxassetid://18897697524", VertexColor = Vector3.new(0.039, 0.11, 0.388)},
+    Morocco = {Tracksuit = "rbxassetid://15107043039", Pants = "rbxassetid://15106968119", VertexColor = Vector3.new(0.121, 0.376, 0.29)},
+    Sweden = {Tracksuit = "rbxassetid://18897663168", Pants = "rbxassetid://18897661303", VertexColor = Vector3.new(0.106, 0.18, 0.388)},
+    Liverpool = {Tracksuit = "rbxassetid://15107420887", Pants = "rbxassetid://15107370058", VertexColor = Vector3.new(0.1, 0.1, 0.1)},
+    Argentina = {Tracksuit = "rbxassetid://15441573500", Pants = "rbxassetid://6383379501", VertexColor = Vector3.new(0.95, 0.95, 0.95)},
+    AtleticoMadrid = {Tracksuit = "rbxassetid://18672692090", Pants = "rbxassetid://18640496290", VertexColor = Vector3.new(0.757, 0, 0.031)},
+    RealMadrid = {Tracksuit = "rbxassetid://15107333190", Pants = "rbxassetid://15107287713", VertexColor = Vector3.new(1, 1, 1)},
+    Belgium = {Tracksuit = "rbxassetid://18652447694", Pants = "rbxassetid://18640273265", VertexColor = Vector3.new(0.608, 0.102, 0.165)},
+    SeattleSounders = {Tracksuit = "rbxassetid://15155268593", Pants = "rbxassetid://15155223190", VertexColor = Vector3.new(0.341, 0.56, 0.231)},
+    Portugal = {Tracksuit = "rbxassetid://15441455921", Pants = "rbxassetid://15148322836", VertexColor = Vector3.new(0.623, 0.125, 0.156)},
+    Wales = {Tracksuit = "rbxassetid://18640526988", Pants = "rbxassetid://18640524650", VertexColor = Vector3.new(0.184, 0.188, 0.224)},
+    Tottenham = {Tracksuit = "rbxassetid://18640570495", Pants = "rbxassetid://18640568037", VertexColor = Vector3.new(0.99, 0.99, 0.99)},
+    Scotland = {Tracksuit = "rbxassetid://18672687656", Pants = "rbxassetid://18672684856", VertexColor = Vector3.new(0.149, 0.255, 0.49)},
+    Barcelona = {Tracksuit = "rbxassetid://15105888118", Pants = "rbxassetid://15143422344", VertexColor = Vector3.new(0.65, 0.137, 0.192)},
+    Ajax = {Tracksuit = "rbxassetid://18640420915", Pants = "rbxassetid://18640418503", VertexColor = Vector3.new(0.05, 0.05, 0.05)},
+    SouthKorea = {Tracksuit = "rbxassetid://18640409287", Pants = "rbxassetid://18640405339", VertexColor = Vector3.new(0.99, 0.99, 0.99)},
+    Brazil = {Tracksuit = "rbxassetid://15441563091", Pants = "rbxassetid://15067629557", VertexColor = Vector3.new(0.219, 0.67, 0.545)},
+    Juventus = {Tracksuit = "rbxassetid://109248618534842", Pants = "rbxassetid://15289237982", VertexColor = Vector3.new(0, 0, 0)},
+    Canada = {Tracksuit = "rbxassetid://15107440236", Pants = "rbxassetid://15107102710", VertexColor = Vector3.new(0.915, 0.1, 0.1)},
+    England = {Tracksuit = "rbxassetid://18640247705", Pants = "rbxassetid://18640234942", VertexColor = Vector3.new(0.004, 0.169, 0.737)},
+    Arsenal = {Tracksuit = "rbxassetid://18640117782", Pants = "rbxassetid://18640115040", VertexColor = Vector3.new(1, 1, 1)},
+    Italy = {Tracksuit = "rbxassetid://18652441830", Pants = "rbxassetid://18640535256", VertexColor = Vector3.new(0.129, 0.286, 0.682)},
+    Japan = {Tracksuit = "rbxassetid://15486035362", Pants = "rbxassetid://15098612543", VertexColor = Vector3.new(0.839, 0.156, 0.125)},
+    Poland = {Tracksuit = "rbxassetid://18816034283", Pants = "rbxassetid://18816029572", VertexColor = Vector3.new(1, 0.078, 0.094)}
+    }
+
+    vape.Categories.Render:CreateModule({
+        Name = "Tracksuit",
+        Tooltip = "Clientsided, Refresh every time you swap teams or something",
+        Default = true,
+        Function = function(callback)
+            local Players = game:GetService("Players")
+            local RunService = game:GetService("RunService")
+            local LocalPlayer = Players.LocalPlayer
+            local CharacterContainer = workspace:WaitForChild("CharacterContainer")
+
+            local function cleanupOldOutfit()
+                if CharacterContainer then
+                    local playerContainer = CharacterContainer:FindFirstChild(LocalPlayer.Name)
+                    if playerContainer then
+                        local oldNeck = playerContainer:FindFirstChild("TracksuitNeck")
+                        if oldNeck then oldNeck:Destroy() end
+                    end
+                end
+            end
+
+            local function ensurePlayerContainer()
+                local container = CharacterContainer:FindFirstChild(LocalPlayer.Name)
+                if not container then
+                    repeat RunService.Heartbeat:Wait()
+                        container = CharacterContainer:FindFirstChild(LocalPlayer.Name)
+                    until container
+                end
+                return container
+            end
+
+            local function getCurrentTeam()
+                local playerContainer = ensurePlayerContainer()
+                local torso = playerContainer:FindFirstChild("Torso")
+                if not torso then return nil end
+                local jerseyGUI = torso:FindFirstChild("JerseyGUI")
+                if not jerseyGUI then return nil end
+                local teamLabel = jerseyGUI:FindFirstChild("Team")
+                return teamLabel and teamLabel.Text or nil
+            end
+
+            local function detectOutfit()
+                if LocalPlayer:FindFirstChild("SelectedTeam") and LocalPlayer.SelectedTeam.Value == "N/A" then
+                    return "SPECTATOR"
+                end
+                local teamName = getCurrentTeam()
+                if not teamName then return nil end
+                local lowerTeam = string.lower(teamName)
+                for keyword, outfitName in pairs(TEAM_KEYWORDS) do
+                    if string.find(lowerTeam, keyword) then
+                        return outfitName
+                    end
+                end
+                return nil
+            end
+
+            local function createExactTracksuitNeck(playerContainer, outfitName)
+                local outfit = OUTFITS[outfitName]
+                if not outfit then return nil end
+                local neckPart = Instance.new("Part")
+                neckPart.Name = "TracksuitNeck"
+                neckPart.BrickColor = BrickColor.new("Medium stone grey")
+                neckPart.Color = Color3.fromRGB(163, 162, 165)
+                neckPart.Material = Enum.Material.Plastic
+                neckPart.Size = Vector3.new(1, 1.085, 1)
+                neckPart.CanCollide = false
+                neckPart.Anchored = false
+                neckPart.Parent = playerContainer
+
+                Instance.new("StringValue", neckPart).Name = "AvatarPartScaleType"
+                Instance.new("Attachment", neckPart).Name = "HatAttachment"
+                neckPart.HatAttachment.CFrame = CFrame.new(0, 1.021, 0)
+
+                Instance.new("Vector3Value", neckPart).Name = "OriginalSize"
+                neckPart.OriginalSize.Value = Vector3.new(1, 1, 1)
+
+                local mesh = Instance.new("SpecialMesh")
+                mesh.Name = "SpecialMesh"
+                mesh.MeshId = "rbxassetid://12204061268"
+                mesh.TextureId = "rbxassetid://15565040201"
+                mesh.MeshType = Enum.MeshType.FileMesh
+                mesh.Scale = Vector3.new(1, 1.085, 1)
+                mesh.VertexColor = outfit.VertexColor
+                mesh.Parent = neckPart
+
+                local weld = Instance.new("Weld")
+                weld.Name = "TorsoWeld"
+                weld.Parent = neckPart
+
+                return neckPart
+            end
+
+            local function modifyTeamClothing(playerContainer, outfitName)
+                local outfit = OUTFITS[outfitName]
+                if not outfit then return end
+                local shirt = playerContainer:FindFirstChild("Shirt")
+                if shirt then shirt.ShirtTemplate = outfit.Tracksuit end
+                local pants = playerContainer:FindFirstChild("Pants")
+                if pants then pants.PantsTemplate = outfit.Pants end
+            end
+
+            local function positionNeckPart(neckPart, playerContainer)
+                local head = playerContainer:FindFirstChild("Head")
+                if head and neckPart and neckPart:FindFirstChild("TorsoWeld") then
+                    local weld = neckPart.TorsoWeld
+                    weld.Part0 = head
+                    weld.Part1 = neckPart
+                    weld.C0 = CFrame.new(0, -0.55, 0)
+                end
+            end
+
+            local function createFullOutfit()
+                cleanupOldOutfit()
+                local playerContainer = ensurePlayerContainer()
+                local outfitName = detectOutfit()
+                if outfitName == "SPECTATOR" then return end
+                if outfitName then
+                    modifyTeamClothing(playerContainer, outfitName)
+                    local neckPart = createExactTracksuitNeck(playerContainer, outfitName)
+                    if neckPart then
+                        positionNeckPart(neckPart, playerContainer)
+                    end
+                end
+            end
+
+            local function setupTeamChangeMonitor()
+                coroutine.wrap(function()
+                    local lastTeam = nil
+                    while callback() do
+                        local isSpectator = LocalPlayer.SelectedTeam and LocalPlayer.SelectedTeam.Value == "N/A"
+                        local currentTeam = isSpectator and "SPECTATOR" or getCurrentTeam()
+                        if currentTeam and currentTeam ~= lastTeam then
+                            createFullOutfit()
+                            lastTeam = currentTeam
+                        end
+                        task.wait(1)
+                    end
+                end)()
+            end
+
+            local function init()
+                pcall(createFullOutfit)
+                setupTeamChangeMonitor()
+                LocalPlayer.CharacterAdded:Connect(function()
+                    task.wait(1)
+                    createFullOutfit()
+                    setupTeamChangeMonitor()
+                end)
+                CharacterContainer.ChildAdded:Connect(function(child)
+                    if child.Name == LocalPlayer.Name then
+                        task.wait(0.5)
+                        createFullOutfit()
+                        setupTeamChangeMonitor()
+                    end
+                end)
+                RunService.Heartbeat:Connect(function()
+                    if not callback() then return end
+                    local container = CharacterContainer:FindFirstChild(LocalPlayer.Name)
+                    if container then
+                        local neckPart = container:FindFirstChild("TracksuitNeck")
+                        if neckPart then
+                            positionNeckPart(neckPart, container)
+                        end
+                    end
+                end)
+                if LocalPlayer:FindFirstChild("SelectedTeam") then
+                    LocalPlayer.SelectedTeam:GetPropertyChangedSignal("Value"):Connect(function()
+                        createFullOutfit()
+                    end)
+                end
+            end
+
+            init()
+        end
+    })
+end)
+
+bit32 = {};
+local N = 32;
+local P = 2 ^ N;
+bit32.bnot = function(x)
+	x = x % P;
+	return (P - 1) - x;
+end;
+bit32.band = function(x, y)
+	if (y == 255) then
+		return x % 256;
+	end
+	if (y == 65535) then
+		return x % 65536;
+	end
+	if (y == 4294967295) then
+		return x % 4294967296;
+	end
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) == 2) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.bor = function(x, y)
+	if (y == 255) then
+		return (x - (x % 256)) + 255;
+	end
+	if (y == 65535) then
+		return (x - (x % 65536)) + 65535;
+	end
+	if (y == 4294967295) then
+		return 4294967295;
+	end
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) >= 1) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.bxor = function(x, y)
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) == 1) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.lshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount < 0) then
+		return math.floor(x * (2 ^ s_amount));
+	else
+		return (x * (2 ^ s_amount)) % P;
+	end
+end;
+bit32.rshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount > 0) then
+		return math.floor(x * (2 ^ -s_amount));
+	else
+		return (x * (2 ^ -s_amount)) % P;
+	end
+end;
+bit32.arshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount > 0) then
+		local add = 0;
+		if (x >= (P / 2)) then
+			add = P - (2 ^ (N - s_amount));
+		end
+		return math.floor(x * (2 ^ -s_amount)) + add;
+	else
+		return (x * (2 ^ -s_amount)) % P;
+	end
+end;
+local TABLE_TableIndirection = {};
+run(function()
+	TABLE_TableIndirection["BLOCKED_NAMES%0"] = {JustUsedSkill=true,NoCharge=true,KickCD=true,Knockdown=true,OverchargeActive=true,CameraLocked=true,TakingPen=true,NoKickFrame=true,FOVOverride=true};
+	TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+	TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+	TABLE_TableIndirection["bypassing%0"] = false;
+	TABLE_TableIndirection["statusConn%0"] = nil;
+	TABLE_TableIndirection["loopThread%0"] = nil;
+	local function wipe(status)
+		for _, inst in ipairs(status:GetChildren()) do
+			if TABLE_TableIndirection["BLOCKED_NAMES%0"][inst.Name] then
+				pcall(function()
+					inst:Destroy();
+				end);
+			end
+		end
+	end
+	local function attachBypass()
+		TABLE_TableIndirection["char%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character or TABLE_TableIndirection["LocalPlayer%0"].CharacterAdded:Wait();
+		TABLE_TableIndirection["status%0"] = TABLE_TableIndirection["char%0"]:WaitForChild("Status", 15 - 10);
+		if not TABLE_TableIndirection["status%0"] then
+			return;
+		end
+		if TABLE_TableIndirection["statusConn%0"] then
+			pcall(function()
+				TABLE_TableIndirection["statusConn%0"]:Disconnect();
+			end);
+		end
+		if TABLE_TableIndirection["loopThread%0"] then
+			pcall(function()
+				TABLE_TableIndirection["loopThread%0"]:Disconnect();
+			end);
+		end
+		TABLE_TableIndirection["statusConn%0"] = TABLE_TableIndirection["status%0"].ChildAdded:Connect(function(child)
+			if TABLE_TableIndirection["BLOCKED_NAMES%0"][child.Name] then
+				task.defer(function()
+					pcall(function()
+						child:Destroy();
+					end);
+				end);
+			end
+		end);
+		TABLE_TableIndirection["loopThread%0"] = game:GetService("RunService").RenderStepped:Connect(function()
+			wipe(TABLE_TableIndirection["status%0"]);
+		end);
+	end
+	TABLE_TableIndirection["Module%0"] = vape.Categories.Blatant:CreateModule({Name="StunDisabler",Tooltip="Removes Stun for Headers, Bikes blah blah blah!",Default=false,Function=function(enabled)
+		TABLE_TableIndirection["bypassing%0"] = enabled;
+		if not enabled then
+			if TABLE_TableIndirection["statusConn%0"] then
+				pcall(function()
+					TABLE_TableIndirection["statusConn%0"]:Disconnect();
+				end);
+				TABLE_TableIndirection["statusConn%0"] = nil;
+			end
+			if TABLE_TableIndirection["loopThread%0"] then
+				pcall(function()
+					TABLE_TableIndirection["loopThread%0"]:Disconnect();
+				end);
+				TABLE_TableIndirection["loopThread%0"] = nil;
+			end
+			return;
+		end
+		task.spawn(function()
+			attachBypass();
+		end);
+		TABLE_TableIndirection["LocalPlayer%0"].CharacterAdded:Connect(function()
+			if TABLE_TableIndirection["bypassing%0"] then
+				task.wait(0.5);
+				attachBypass();
+			end
+		end);
+	end});
+end);
+
+run(function()
+    local OneTimeTackle
+
+    OneTimeTackle = vape.Categories.Combat:CreateModule({
+        Name = "SlideTackleExploit",
+        Tooltip = "Fires SlideTackleHit once",
+        Function = function(callback)
+            if callback then
+                OneTimeTackle:Toggle()
+
+                local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                local Workspace = game:GetService("Workspace")
+
+                local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("SlideTackleHit")
+                local ball = Workspace:WaitForChild("Temp"):FindFirstChild("Ball")
+
+                if remote and ball then
+                    local args = {
+                        ball,
+                        Vector3.new(-16.084280014038086, 5, 49.8039436340332),
+                        0.12758135795593262,
+                        true,
+                        "Left",
+                        Vector3.new(182.63217163085938, 10.629911422729492, -169.33090209960938)
+                    }
+
+                    pcall(function()
+                        remote:FireServer(unpack(args))
+                    end)
+                else
+                    vape:CreateNotification("OneTimeTackle", "Missing remote or ball.", 5, "alert")
+                end
+            end
+        end
+    })
+end)
+
+run(function()
+    local Module = vape.Categories.Utility:CreateModule({
+        Name = "IgnoreDiveRestrinctions",
+        Description = "Dive Anywhere on the field lol",
+        Enabled = false
+    })
+
+    local RS = game:GetService("ReplicatedStorage")
+    local Players = game:GetService("Players")
+    local UIS = game:GetService("UserInputService")
+    local RunService = game:GetService("RunService")
+    local Debris = game:GetService("Debris")
+
+    local LP = Players.LocalPlayer
+    local AnimFolder = RS:WaitForChild("AnimFolder"):WaitForChild("Default Animations")
+    local DiveEndlag = RS:WaitForChild("Remotes"):WaitForChild("DiveEndlag")
+
+    local keysDown = {}
+    local cooldown = false
+
+    local anims = {
+        W = "GKDiveForward",
+        A = "GKAirDiveLeft",
+        D = "GKAirDiveRight",
+        S = "GKDiveUp"
+    }
+
+    local directions = {
+        W = function(hrp) return hrp.CFrame.LookVector * 60 end,
+        A = function(hrp) return -hrp.CFrame.RightVector * 60 end,
+        D = function(hrp) return hrp.CFrame.RightVector * 60 end,
+        S = function(hrp) return Vector3.new(0, 60, 0) end
+    }
+
+    local function getDirection()
+        for _, key in pairs({"W", "A", "D", "S"}) do
+            if keysDown[key] then return key end
+        end
+        return nil
+    end
+
+    local function playDive(key)
+        if cooldown then return end
+        cooldown = true
+        task.delay(0.4, function() cooldown = false end)
+
+        local Char = LP.Character
+        if not Char then return end
+        local HRP = Char:FindFirstChild("HumanoidRootPart")
+        local Hum = Char:FindFirstChild("Humanoid")
+        local Animator = Hum and Hum:FindFirstChildOfClass("Animator")
+        if not HRP or not Hum or not Animator then return end
+
+        local animName = anims[key]
+        local animObj = AnimFolder:FindFirstChild(animName)
+        if not animObj then return end
+
+        local track = Animator:LoadAnimation(animObj)
+        track:AdjustSpeed(0.6)
+        track:Play()
+        Debris:AddItem(track, 1.5)
+
+        local vel = Instance.new("BodyVelocity")
+        vel.Velocity = directions[key](HRP)
+        vel.MaxForce = Vector3.new(1, 0, 1) * 1e5 + Vector3.new(0, 1, 0) * 1e4
+        vel.P = 10000
+        vel.Name = "GKBodyVelocity"
+        vel.Parent = HRP
+        Debris:AddItem(vel, 0.4)
+
+        task.delay(0.45, function()
+            HRP.Anchored = true
+            task.delay(0.05, function()
+                HRP.Anchored = false
+                pcall(function() DiveEndlag:FireServer() end)
+            end)
+        end)
+    end
+
+    UIS.InputBegan:Connect(function(input, gpe)
+        if gpe or not Module.Enabled then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            keysDown[input.KeyCode.Name] = true
+        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+            local dirKey = getDirection()
+            if dirKey then
+                playDive(dirKey)
+            end
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            keysDown[input.KeyCode.Name] = nil
+        end
+    end)
+end)
+
+run(function()
+	local ElasticoDash
+	local Players = game:GetService("Players")
+	local Workspace = game:GetService("Workspace")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+	local player = Players.LocalPlayer
+	local TEMP_FOLDER = Workspace:WaitForChild("Temp")
+	local kickRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Kick")
+	local diveFX = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DiveFX")
+
+	local lastActivation = 0
+	local COOLDOWN = 1.0
+
+	local LOCAL_VECTOR1 = Vector3.new(1, 0.1, 0.5)
+	local LOCAL_VECTOR2 = Vector3.new(-1, 0.1, 0.2)
+
+	local function localToWorld(localVec, hrp)
+		return hrp.CFrame:VectorToWorldSpace(localVec)
+	end
+
+	local function scaleVector(vec, magnitude)
+		return vec.Unit * magnitude
+	end
+
+	local function getPlayerMovementDirection(hrp)
+		local horizontalVelocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+		if horizontalVelocity.Magnitude > 1 then
+			return horizontalVelocity.Unit
+		end
+		return hrp.CFrame.LookVector
+	end
+
+	local function playAnim(animName)
+		local character = player.Character
+		if not character then return end
+
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid then return end
+
+		local animFolder = ReplicatedStorage:FindFirstChild("AnimFolder")
+		local anims = animFolder and animFolder:FindFirstChild("Default Animations")
+		local anim = anims and anims:FindFirstChild(animName)
+		if not anim then return end
+
+		local track
+		pcall(function()
+			track = humanoid:LoadAnimation(anim)
+		end)
+		if track then
+			track:Play()
+		end
+	end
+
+	local function performElasticoWithPull()
+		local currentTime = tick()
+		if currentTime - lastActivation < COOLDOWN then return end
+		lastActivation = currentTime
+
+		local character = player.Character
+		if not character then return end
+
+		local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+		if not humanoidRootPart then return end
+
+		local ball = TEMP_FOLDER:FindFirstChild("Ball")
+		if not ball then return end
+
+		local vec1 = scaleVector(localToWorld(LOCAL_VECTOR1, humanoidRootPart), 55)
+		playAnim("RightDribbleR")
+		kickRemote:FireServer(vec1, ball, true, false, 33, "Right", humanoidRootPart.CFrame, {}, false, false)
+
+		task.wait(0.2)
+
+		local vec2 = scaleVector(localToWorld(LOCAL_VECTOR2, humanoidRootPart), 55)
+		playAnim("SolsolerollL_B")
+		kickRemote:FireServer(vec2, ball, true, false, 33, "Right", humanoidRootPart.CFrame, {}, false, false)
+
+		task.wait(0.15)
+
+		local dir = getPlayerMovementDirection(humanoidRootPart) * 55
+		playAnim("firstTouch_airLF")
+		kickRemote:FireServer(dir, ball, false, false, 33, "Right", humanoidRootPart.CFrame, {}, false, false)
+
+		task.wait(0.3)
+
+		local weakDir = getPlayerMovementDirection(humanoidRootPart) * 27
+		playAnim("firstTouch_AirF")
+		kickRemote:FireServer(weakDir, ball, true, false, 33, "Right", humanoidRootPart.CFrame, {}, false, false)
+
+	end
+
+	ElasticoDash = vape.Categories.Blatant:CreateModule({
+		Name = "HocusPocus",
+		Tooltip = "Executes a hocus pocus like dribble",
+		Keybind = Enum.KeyCode.One,
+		ToggleOnKeybind = false,
+		Function = function(state)
+			if state then
+				performElasticoWithPull()
+				ElasticoDash:Toggle()
+			end
+		end
+	})
+end)
+
+bit32 = {};
+local N = 32;
+local P = 2 ^ N;
+bit32.bnot = function(x)
+	x = x % P;
+	return (P - 1) - x;
+end;
+bit32.band = function(x, y)
+	if (y == 255) then
+		return x % 256;
+	end
+	if (y == 65535) then
+		return x % 65536;
+	end
+	if (y == 4294967295) then
+		return x % 4294967296;
+	end
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) == 2) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.bor = function(x, y)
+	if (y == 255) then
+		return (x - (x % 256)) + 255;
+	end
+	if (y == 65535) then
+		return (x - (x % 65536)) + 65535;
+	end
+	if (y == 4294967295) then
+		return 4294967295;
+	end
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) >= 1) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.bxor = function(x, y)
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) == 1) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.lshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount < 0) then
+		return math.floor(x * (2 ^ s_amount));
+	else
+		return (x * (2 ^ s_amount)) % P;
+	end
+end;
+bit32.rshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount > 0) then
+		return math.floor(x * (2 ^ -s_amount));
+	else
+		return (x * (2 ^ -s_amount)) % P;
+	end
+end;
+bit32.arshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount > 0) then
+		local add = 0;
+		if (x >= (P / 2)) then
+			add = P - (2 ^ (N - s_amount));
+		end
+		return math.floor(x * (2 ^ -s_amount)) + add;
+	else
+		return (x * (2 ^ -s_amount)) % P;
+	end
+end;
+local TABLE_TableIndirection = {};
+run(function()
+	TABLE_TableIndirection["SlideFXSpam%0"] = {Enabled=false};
+	TABLE_TableIndirection["RS%0"] = game:GetService("ReplicatedStorage");
+	TABLE_TableIndirection["RunService%0"] = game:GetService("RunService");
+	TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+	TABLE_TableIndirection["remote%0"] = TABLE_TableIndirection["RS%0"]:FindFirstChild("Remotes") and TABLE_TableIndirection["RS%0"].Remotes:FindFirstChild("SlideFX");
+	TABLE_TableIndirection["fakeArgs%0"] = {true,false,0,1,"test",Vector3.new(0, 0, 0),CFrame.new(),{},nil};
+	TABLE_TableIndirection["renderConn%0"] = nil;
+	TABLE_TableIndirection["interceptConn%0"] = nil;
+	SlideFXSpam = vape.Categories.Combat:CreateModule({Name="Ping Crasher",Tooltip="Destroy player's ping and fps",Function=function(callback)
+		TABLE_TableIndirection["SlideFXSpam%0"].Enabled = callback;
+		if (callback and TABLE_TableIndirection["remote%0"] and TABLE_TableIndirection["remote%0"]:IsA("RemoteEvent")) then
+			TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+			local function blockInstance(obj)
+				if (obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail")) then
+					pcall(function()
+						obj.Enabled = false;
+						obj:Destroy();
+					end);
+				elseif obj:IsA("Sound") then
+					pcall(function()
+						obj.Volume = 0;
+						obj:Stop();
+						obj:Destroy();
+					end);
+				end
+			end
+			TABLE_TableIndirection["interceptConn%0"] = workspace.DescendantAdded:Connect(function(obj)
+				TABLE_TableIndirection["char%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character or workspace;
+				if obj:IsDescendantOf(TABLE_TableIndirection["char%0"]) then
+					blockInstance(obj);
+				end
+			end);
+			for _, obj in ipairs(workspace:GetDescendants()) do
+				TABLE_TableIndirection["char%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character or workspace;
+				if obj:IsDescendantOf(TABLE_TableIndirection["char%0"]) then
+					blockInstance(obj);
+				end
+			end
+			TABLE_TableIndirection["renderConn%0"] = TABLE_TableIndirection["RunService%0"].RenderStepped:Connect(function()
+				for i = 1, 2000 do
+					task.spawn(function()
+						pcall(function()
+							TABLE_TableIndirection["remote%0"]:FireServer(unpack(TABLE_TableIndirection["fakeArgs%0"]));
+						end);
+					end);
+				end
+			end);
+		else
+			if TABLE_TableIndirection["renderConn%0"] then
+				TABLE_TableIndirection["renderConn%0"]:Disconnect();
+				TABLE_TableIndirection["renderConn%0"] = nil;
+			end
+			if TABLE_TableIndirection["interceptConn%0"] then
+				TABLE_TableIndirection["interceptConn%0"]:Disconnect();
+				TABLE_TableIndirection["interceptConn%0"] = nil;
+			end
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["BringBall%0"] = nil;
+	BringBall = vape.Categories.Utility:CreateModule({Name="BringBall",Tooltip="Teleports the ball to your position",Function=function(callback)
+		if callback then
+			TABLE_TableIndirection["BringBall%0"]:Toggle();
+			TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+			TABLE_TableIndirection["Workspace%0"] = game:GetService("Workspace");
+			TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+			TABLE_TableIndirection["TEMP_FOLDER%0"] = TABLE_TableIndirection["Workspace%0"]:FindFirstChild("Temp");
+			TABLE_TableIndirection["BALL_NAME%0"] = "Ball";
+			if not TABLE_TableIndirection["TEMP_FOLDER%0"] then
+				vape:CreateNotification("BringBall", "Temp folder not found.", 5, "alert");
+				return;
+			end
+			TABLE_TableIndirection["ball%0"] = TABLE_TableIndirection["TEMP_FOLDER%0"]:FindFirstChild(TABLE_TableIndirection["BALL_NAME%0"]);
+			if (not TABLE_TableIndirection["ball%0"] or not TABLE_TableIndirection["ball%0"]:IsA("BasePart")) then
+				vape:CreateNotification("BringBall", "Ball not found, Or its already in your hand", 5, "alert");
+				return;
+			end
+			TABLE_TableIndirection["character%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character;
+			if (not TABLE_TableIndirection["character%0"] or not TABLE_TableIndirection["character%0"]:FindFirstChild("HumanoidRootPart")) then
+				vape:CreateNotification("BringBall", "Player HRP not found.", 5, "alert");
+				return;
+			end
+			TABLE_TableIndirection["hrp%0"] = TABLE_TableIndirection["character%0"].HumanoidRootPart;
+			pcall(function()
+				TABLE_TableIndirection["ball%0"]:SetNetworkOwner(TABLE_TableIndirection["LocalPlayer%0"]);
+			end);
+			pcall(function()
+				TABLE_TableIndirection["ball%0"].CFrame = TABLE_TableIndirection["hrp%0"].CFrame * CFrame.new(0, 0, -2);
+			end);
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["DiveFXModule%0"] = nil;
+	DiveFXModule = vape.Categories.Render:CreateModule({Name="TheKingIsHere",Tooltip="Fire the DiveFX remote once.",Function=function(callback)
+		if callback then
+			TABLE_TableIndirection["DiveFXModule%0"]:Toggle();
+			TABLE_TableIndirection["ReplicatedStorage%0"] = game:GetService("ReplicatedStorage");
+			TABLE_TableIndirection["remote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:FindFirstChild("Remotes") and TABLE_TableIndirection["ReplicatedStorage%0"].Remotes:FindFirstChild("DiveFX");
+			if (TABLE_TableIndirection["remote%0"] and (typeof(TABLE_TableIndirection["remote%0"]) == "Instance") and TABLE_TableIndirection["remote%0"]:IsA("RemoteEvent")) then
+				pcall(function()
+					TABLE_TableIndirection["remote%0"]:FireServer();
+				end);
+			else
+				vape:CreateNotification("DiveFX", "DiveFX remote not found.", 4, "alert");
+			end
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["NearestGrab%0"] = nil;
+	NearestGrab = vape.Categories.Utility:CreateModule({Name="PhysicalNearest",Tooltip="Physical the closest player (OneShot)",Function=function(callback)
+		if not callback then
+			return;
+		end
+		task.delay(0.05, function()
+			TABLE_TableIndirection["NearestGrab%0"]:Toggle(false);
+		end);
+		TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+		TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+		TABLE_TableIndirection["myChar%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character;
+		if (not TABLE_TableIndirection["myChar%0"] or not TABLE_TableIndirection["myChar%0"]:FindFirstChild("HumanoidRootPart")) then
+			return;
+		end
+		TABLE_TableIndirection["myHRP%0"] = TABLE_TableIndirection["myChar%0"].HumanoidRootPart;
+		local closestPlayer, closestDist = nil, math.huge;
+		for _, plr in pairs(TABLE_TableIndirection["Players%0"]:GetPlayers()) do
+			if ((plr ~= TABLE_TableIndirection["LocalPlayer%0"]) and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")) then
+				TABLE_TableIndirection["dist%0"] = (plr.Character.HumanoidRootPart.Position - TABLE_TableIndirection["myHRP%0"].Position).Magnitude;
+				if (TABLE_TableIndirection["dist%0"] < closestDist) then
+					closestDist = TABLE_TableIndirection["dist%0"];
+					closestPlayer = plr;
+				end
+			end
+		end
+		if closestPlayer then
+			TABLE_TableIndirection["targetHRP%0"] = closestPlayer.Character.HumanoidRootPart;
+			pcall(function()
+				TABLE_TableIndirection["targetHRP%0"]:SetNetworkOwner(TABLE_TableIndirection["LocalPlayer%0"]);
+			end);
+			TABLE_TableIndirection["targetHRP%0"].CFrame = TABLE_TableIndirection["myHRP%0"].CFrame + Vector3.new(1, 0, 0);
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+	TABLE_TableIndirection["UIS%0"] = game:GetService("UserInputService");
+	TABLE_TableIndirection["ReplicatedStorage%0"] = game:GetService("ReplicatedStorage");
+	TABLE_TableIndirection["Lighting%0"] = game:GetService("Lighting");
+	TABLE_TableIndirection["TweenService%0"] = game:GetService("TweenService");
+	TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+	TABLE_TableIndirection["Camera%0"] = workspace.CurrentCamera;
+	TABLE_TableIndirection["TEMP_FOLDER%0"] = workspace:WaitForChild("Temp");
+	TABLE_TableIndirection["BALL_NAME%0"] = "Ball";
+	TABLE_TableIndirection["ANIMATION_ID%0"] = "rbxassetid://18853355212";
+	TABLE_TableIndirection["KickRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("Kick");
+	TABLE_TableIndirection["SetCollisionRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("SetCollisionGroup");
+	TABLE_TableIndirection["PowerShotRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("PowerShot");
+	TABLE_TableIndirection["KICK_PARAMS_BASE%0"] = {Vector3.new(),nil,false,true,160.5,"Right",CFrame.new(262.50360107421875, 12.629940032958984, -18.665719985961914, 0.9999999403953552, 1.2247009e-8, 0.00030110677471384406, -1.2247551e-8, 1, 1.8031141e-9, -0.00030110677471384406, -1.8068019e-9, 0.9999999403953552)};
+	TABLE_TableIndirection["COLLISION_PARAMS%0"] = {0.917,"NoCharCollide"};
+	local function loadAnimation()
+		TABLE_TableIndirection["character%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character or TABLE_TableIndirection["LocalPlayer%0"].CharacterAdded:Wait();
+		TABLE_TableIndirection["humanoid%0"] = TABLE_TableIndirection["character%0"]:WaitForChild("Humanoid");
+		TABLE_TableIndirection["animator%0"] = TABLE_TableIndirection["humanoid%0"]:WaitForChild("Animator");
+		TABLE_TableIndirection["animation%0"] = Instance.new("Animation");
+		TABLE_TableIndirection["animation%0"].AnimationId = TABLE_TableIndirection["ANIMATION_ID%0"];
+		return TABLE_TableIndirection["animator%0"], TABLE_TableIndirection["animation%0"];
+	end
+	local animator, animation = loadAnimation();
+	TABLE_TableIndirection["LocalPlayer%0"].CharacterAdded:Connect(function(character)
+		character:WaitForChild("Humanoid");
+		animator, animation = loadAnimation();
+	end);
+	local function playPowerShotAnimation()
+		if (animator and animation) then
+			TABLE_TableIndirection["track%0"] = animator:LoadAnimation(animation);
+			TABLE_TableIndirection["track%0"]:Play();
+			delay(0.8, function()
+				if TABLE_TableIndirection["track%0"].IsPlaying then
+					TABLE_TableIndirection["track%0"]:Stop();
+				end
+			end);
+			return TABLE_TableIndirection["track%0"];
+		end
+		return nil;
+	end
+	local function applyDelayedKickBlur()
+		TABLE_TableIndirection["blur%0"] = TABLE_TableIndirection["Lighting%0"]:FindFirstChild("KickBlur") or Instance.new("BlurEffect");
+		TABLE_TableIndirection["blur%0"].Name = "KickBlur";
+		TABLE_TableIndirection["blur%0"].Size = 0;
+		TABLE_TableIndirection["blur%0"].Parent = TABLE_TableIndirection["Lighting%0"];
+		TABLE_TableIndirection["blur%0"].Size = 20;
+		TABLE_TableIndirection["tween%0"] = TABLE_TableIndirection["TweenService%0"]:Create(TABLE_TableIndirection["blur%0"], TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Size=0});
+		TABLE_TableIndirection["tween%0"]:Play();
+		TABLE_TableIndirection["tween%0"].Completed:Connect(function()
+			TABLE_TableIndirection["blur%0"]:Destroy();
+		end);
+	end
+	local function executePowerKick()
+		TABLE_TableIndirection["ball%0"] = TABLE_TableIndirection["TEMP_FOLDER%0"]:FindFirstChild(TABLE_TableIndirection["BALL_NAME%0"]);
+		if not TABLE_TableIndirection["ball%0"] then
+			return;
+		end
+		playPowerShotAnimation();
+		task.delay(0.25, applyDelayedKickBlur);
+		task.wait(0.2);
+		TABLE_TableIndirection["char%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character;
+		TABLE_TableIndirection["hrp%0"] = TABLE_TableIndirection["char%0"] and TABLE_TableIndirection["char%0"]:FindFirstChild("HumanoidRootPart");
+		if not TABLE_TableIndirection["hrp%0"] then
+			return;
+		end
+		TABLE_TableIndirection["camVec%0"] = TABLE_TableIndirection["Camera%0"].CFrame.LookVector;
+		TABLE_TableIndirection["horizontalDirection%0"] = Vector3.new(TABLE_TableIndirection["camVec%0"].X, 0, TABLE_TableIndirection["camVec%0"].Z).Unit;
+		TABLE_TableIndirection["kickDirection%0"] = TABLE_TableIndirection["horizontalDirection%0"] * 170;
+		TABLE_TableIndirection["kickArgs%0"] = {TABLE_TableIndirection["kickDirection%0"],TABLE_TableIndirection["ball%0"],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][3],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][4],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][5],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][6],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][7]};
+		task.wait(0.05);
+		TABLE_TableIndirection["SetCollisionRemote%0"]:FireServer(unpack(TABLE_TableIndirection["COLLISION_PARAMS%0"]));
+		TABLE_TableIndirection["PowerShotRemote%0"]:FireServer();
+		TABLE_TableIndirection["KickRemote%0"]:FireServer(unpack(TABLE_TableIndirection["kickArgs%0"]));
+	end
+	TABLE_TableIndirection["module%0"] = nil;
+	TABLE_TableIndirection["rightClickConnectionBegin%0"] = nil;
+	TABLE_TableIndirection["rightClickConnectionEnd%0"] = nil;
+	module = vape.Categories.Combat:CreateModule({Name="SuperShotpubs",Tooltip="boom",Default=false,Function=function(callback)
+		if callback then
+			TABLE_TableIndirection["rightClickConnectionBegin%0"] = TABLE_TableIndirection["UIS%0"].InputBegan:Connect(function(input, gpe)
+				if ((input.UserInputType == Enum.UserInputType.MouseButton2) and not gpe) then
+					TABLE_TableIndirection["start%0"] = tick();
+					TABLE_TableIndirection["active%0"] = true;
+					task.delay(0.8, function()
+						if (TABLE_TableIndirection["active%0"] and ((tick() - TABLE_TableIndirection["start%0"]) >= 0.8)) then
+							executePowerKick();
+						end
+					end);
+				end
+			end);
+			TABLE_TableIndirection["rightClickConnectionEnd%0"] = TABLE_TableIndirection["UIS%0"].InputEnded:Connect(function(input)
+				if (input.UserInputType == Enum.UserInputType.MouseButton2) then
+				end
+			end);
+		else
+			if TABLE_TableIndirection["rightClickConnectionBegin%0"] then
+				TABLE_TableIndirection["rightClickConnectionBegin%0"]:Disconnect();
+			end
+			if TABLE_TableIndirection["rightClickConnectionEnd%0"] then
+				TABLE_TableIndirection["rightClickConnectionEnd%0"]:Disconnect();
+			end
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["uis%0"] = game:GetService("UserInputService");
+	TABLE_TableIndirection["rs%0"] = game:GetService("RunService");
+	TABLE_TableIndirection["ReplicatedStorage%0"] = game:GetService("ReplicatedStorage");
+	TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+	TABLE_TableIndirection["Workspace%0"] = game:GetService("Workspace");
+	TABLE_TableIndirection["nutmegRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("NutmegCD");
+	TABLE_TableIndirection["ballStatus%0"] = TABLE_TableIndirection["Workspace%0"]:WaitForChild("ballStatus");
+	TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+	local function deleteMegSound()
+		TABLE_TableIndirection["name%0"] = "notification_sound_previs1";
+		TABLE_TableIndirection["sources%0"] = {TABLE_TableIndirection["ReplicatedStorage%0"]:FindFirstChild("UISounds"),TABLE_TableIndirection["Workspace%0"]};
+		for _, container in ipairs(TABLE_TableIndirection["sources%0"]) do
+			if (container and container:FindFirstChild(TABLE_TableIndirection["name%0"])) then
+				pcall(function()
+					container[TABLE_TableIndirection["name%0"]]:Destroy();
+				end);
+			end
+		end
+	end
+	deleteMegSound();
+	TABLE_TableIndirection["running%0"] = false;
+	TABLE_TableIndirection["conn%0"] = nil;
+	TABLE_TableIndirection["iNfinitePoints%0"] = vape.Categories.Blatant:CreateModule({Name="Dupe",Tooltip="Thousands of points a touch",Function=function(callback)
+		TABLE_TableIndirection["running%0"] = callback;
+		if TABLE_TableIndirection["conn%0"] then
+			pcall(function()
+				TABLE_TableIndirection["conn%0"]:Disconnect();
+			end);
+			TABLE_TableIndirection["conn%0"] = nil;
+		end
+		if callback then
+			TABLE_TableIndirection["conn%0"] = TABLE_TableIndirection["rs%0"].RenderStepped:Connect(function()
+				TABLE_TableIndirection["lastKicker%0"] = TABLE_TableIndirection["ballStatus%0"]:FindFirstChild("lastKicked");
+				if (TABLE_TableIndirection["lastKicker%0"] and (TABLE_TableIndirection["lastKicker%0"].Value == TABLE_TableIndirection["LocalPlayer%0"])) then
+					pcall(function()
+						TABLE_TableIndirection["nutmegRemote%0"]:FireServer(TABLE_TableIndirection["LocalPlayer%0"]);
+					end);
+				end
+			end);
+		end
+	end});
+end);
 	
+run(function()
+    local BallRideConnection
+    local speed = 40
+    local radiusOffset = 3
+    local heightOffset = 4
+
+    vape.Categories.World:CreateModule({
+        Name = "BallRide",
+        Tooltip = "Hoverboard Sim",
+        Function = function(callback)
+            if callback then
+                BallRideConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                    local LocalPlayer = game:GetService("Players").LocalPlayer
+                    local character = LocalPlayer.Character
+                    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                    local ball = workspace:FindFirstChild("Temp") and workspace.Temp:FindFirstChild("Ball")
+
+                    if hrp and ball then
+                        local forward = hrp.CFrame.LookVector
+                        local sideOffset = Vector3.new(forward.X, 0, forward.Z).Unit * radiusOffset
+                        local targetPos = ball.Position + sideOffset + Vector3.new(0, heightOffset, 0)
+
+                        hrp.CFrame = CFrame.new(targetPos, ball.Position + forward * 5)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+
+                        local push = sideOffset.Unit * speed
+                        ball.AssemblyLinearVelocity = Vector3.new(push.X, ball.AssemblyLinearVelocity.Y, push.Z)
+                    end
+                end)
+            else
+                if BallRideConnection then
+                    BallRideConnection:Disconnect()
+                    BallRideConnection = nil
+                end
+
+                local LocalPlayer = game:GetService("Players").LocalPlayer
+                local character = LocalPlayer.Character
+                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+                if hrp then
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.CFrame = hrp.CFrame + Vector3.new(0, -0.1, 0)
+                end
+
+                if humanoid then
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end
+        end
+    })
+end)
+
+--[[
+ .____                  ________ ___.    _____                           __                
+ |    |    __ _______   \_____  \\_ |___/ ____\_ __  ______ ____ _____ _/  |_  ___________ 
+ |    |   |  |  \__  \   /   |   \| __ \   __\  |  \/  ___// ___\\__  \\   __\/  _ \_  __ \
+ |    |___|  |  // __ \_/    |    \ \_\ \  | |  |  /\___ \\  \___ / __ \|  | (  <_> )  | \/
+ |_______ \____/(____  /\_______  /___  /__| |____//____  >\___  >____  /__|  \____/|__|   
+         \/          \/         \/    \/                \/     \/     \/                   
+          \_Welcome to LuaObfuscator.com   (Alpha 0.10.9) ~  Much Love, Ferib 
+
+]]--
+
+bit32 = {};
+local N = 32;
+local P = 2 ^ N;
+bit32.bnot = function(x)
+	x = x % P;
+	return (P - 1) - x;
+end;
+bit32.band = function(x, y)
+	if (y == 255) then
+		return x % 256;
+	end
+	if (y == 65535) then
+		return x % 65536;
+	end
+	if (y == 4294967295) then
+		return x % 4294967296;
+	end
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) == 2) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.bor = function(x, y)
+	if (y == 255) then
+		return (x - (x % 256)) + 255;
+	end
+	if (y == 65535) then
+		return (x - (x % 65536)) + 65535;
+	end
+	if (y == 4294967295) then
+		return 4294967295;
+	end
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) >= 1) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.bxor = function(x, y)
+	x, y = x % P, y % P;
+	local r = 0;
+	local p = 1;
+	for i = 1, N do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((a + b) == 1) then
+			r = r + p;
+		end
+		p = 2 * p;
+	end
+	return r;
+end;
+bit32.lshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount < 0) then
+		return math.floor(x * (2 ^ s_amount));
+	else
+		return (x * (2 ^ s_amount)) % P;
+	end
+end;
+bit32.rshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount > 0) then
+		return math.floor(x * (2 ^ -s_amount));
+	else
+		return (x * (2 ^ -s_amount)) % P;
+	end
+end;
+bit32.arshift = function(x, s_amount)
+	if (math.abs(s_amount) >= N) then
+		return 0;
+	end
+	x = x % P;
+	if (s_amount > 0) then
+		local add = 0;
+		if (x >= (P / 2)) then
+			add = P - (2 ^ (N - s_amount));
+		end
+		return math.floor(x * (2 ^ -s_amount)) + add;
+	else
+		return (x * (2 ^ -s_amount)) % P;
+	end
+end;
+local TABLE_TableIndirection = {};
+run(function()
+	TABLE_TableIndirection["SlideFXSpam%0"] = {Enabled=false};
+	TABLE_TableIndirection["RS%0"] = game:GetService("ReplicatedStorage");
+	TABLE_TableIndirection["RunService%0"] = game:GetService("RunService");
+	TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+	TABLE_TableIndirection["remote%0"] = TABLE_TableIndirection["RS%0"]:FindFirstChild("Remotes") and TABLE_TableIndirection["RS%0"].Remotes:FindFirstChild("SlideFX");
+	TABLE_TableIndirection["fakeArgs%0"] = {true,false,0,1,"test",Vector3.new(0, 0, 0),CFrame.new(),{},nil};
+	TABLE_TableIndirection["renderConn%0"] = nil;
+	TABLE_TableIndirection["interceptConn%0"] = nil;
+	SlideFXSpam = vape.Categories.Combat:CreateModule({Name="Ping Crasher",Tooltip="Destroy player's ping and fps",Function=function(callback)
+		TABLE_TableIndirection["SlideFXSpam%0"].Enabled = callback;
+		if (callback and TABLE_TableIndirection["remote%0"] and TABLE_TableIndirection["remote%0"]:IsA("RemoteEvent")) then
+			TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+			local function blockInstance(obj)
+				if (obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail")) then
+					pcall(function()
+						obj.Enabled = false;
+						obj:Destroy();
+					end);
+				elseif obj:IsA("Sound") then
+					pcall(function()
+						obj.Volume = 0;
+						obj:Stop();
+						obj:Destroy();
+					end);
+				end
+			end
+			TABLE_TableIndirection["interceptConn%0"] = workspace.DescendantAdded:Connect(function(obj)
+				TABLE_TableIndirection["char%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character or workspace;
+				if obj:IsDescendantOf(TABLE_TableIndirection["char%0"]) then
+					blockInstance(obj);
+				end
+			end);
+			for _, obj in ipairs(workspace:GetDescendants()) do
+				TABLE_TableIndirection["char%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character or workspace;
+				if obj:IsDescendantOf(TABLE_TableIndirection["char%0"]) then
+					blockInstance(obj);
+				end
+			end
+			TABLE_TableIndirection["renderConn%0"] = TABLE_TableIndirection["RunService%0"].RenderStepped:Connect(function()
+				for i = 1, 2000 do
+					task.spawn(function()
+						pcall(function()
+							TABLE_TableIndirection["remote%0"]:FireServer(unpack(TABLE_TableIndirection["fakeArgs%0"]));
+						end);
+					end);
+				end
+			end);
+		else
+			if TABLE_TableIndirection["renderConn%0"] then
+				TABLE_TableIndirection["renderConn%0"]:Disconnect();
+				TABLE_TableIndirection["renderConn%0"] = nil;
+			end
+			if TABLE_TableIndirection["interceptConn%0"] then
+				TABLE_TableIndirection["interceptConn%0"]:Disconnect();
+				TABLE_TableIndirection["interceptConn%0"] = nil;
+			end
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["BringBall%0"] = nil;
+	BringBall = vape.Categories.Utility:CreateModule({Name="BringBall",Tooltip="Teleports the ball to your position",Function=function(callback)
+		if callback then
+			TABLE_TableIndirection["BringBall%0"]:Toggle();
+			TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+			TABLE_TableIndirection["Workspace%0"] = game:GetService("Workspace");
+			TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+			TABLE_TableIndirection["TEMP_FOLDER%0"] = TABLE_TableIndirection["Workspace%0"]:FindFirstChild("Temp");
+			TABLE_TableIndirection["BALL_NAME%0"] = "Ball";
+			if not TABLE_TableIndirection["TEMP_FOLDER%0"] then
+				vape:CreateNotification("BringBall", "Temp folder not found.", 5, "alert");
+				return;
+			end
+			TABLE_TableIndirection["ball%0"] = TABLE_TableIndirection["TEMP_FOLDER%0"]:FindFirstChild(TABLE_TableIndirection["BALL_NAME%0"]);
+			if (not TABLE_TableIndirection["ball%0"] or not TABLE_TableIndirection["ball%0"]:IsA("BasePart")) then
+				vape:CreateNotification("BringBall", "Ball not found, Or its already in your hand", 5, "alert");
+				return;
+			end
+			TABLE_TableIndirection["character%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character;
+			if (not TABLE_TableIndirection["character%0"] or not TABLE_TableIndirection["character%0"]:FindFirstChild("HumanoidRootPart")) then
+				vape:CreateNotification("BringBall", "Player HRP not found.", 5, "alert");
+				return;
+			end
+			TABLE_TableIndirection["hrp%0"] = TABLE_TableIndirection["character%0"].HumanoidRootPart;
+			pcall(function()
+				TABLE_TableIndirection["ball%0"]:SetNetworkOwner(TABLE_TableIndirection["LocalPlayer%0"]);
+			end);
+			pcall(function()
+				TABLE_TableIndirection["ball%0"].CFrame = TABLE_TableIndirection["hrp%0"].CFrame * CFrame.new(0, 0, -2);
+			end);
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["DiveFXModule%0"] = nil;
+	DiveFXModule = vape.Categories.Render:CreateModule({Name="TheKingIsHere",Tooltip="Fire the DiveFX remote once.",Function=function(callback)
+		if callback then
+			TABLE_TableIndirection["DiveFXModule%0"]:Toggle();
+			TABLE_TableIndirection["ReplicatedStorage%0"] = game:GetService("ReplicatedStorage");
+			TABLE_TableIndirection["remote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:FindFirstChild("Remotes") and TABLE_TableIndirection["ReplicatedStorage%0"].Remotes:FindFirstChild("DiveFX");
+			if (TABLE_TableIndirection["remote%0"] and (typeof(TABLE_TableIndirection["remote%0"]) == "Instance") and TABLE_TableIndirection["remote%0"]:IsA("RemoteEvent")) then
+				pcall(function()
+					TABLE_TableIndirection["remote%0"]:FireServer();
+				end);
+			else
+				vape:CreateNotification("DiveFX", "DiveFX remote not found.", 4, "alert");
+			end
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["NearestGrab%0"] = nil;
+	NearestGrab = vape.Categories.Utility:CreateModule({Name="PhysicalNearest",Tooltip="Physical the closest player (OneShot)",Function=function(callback)
+		if not callback then
+			return;
+		end
+		task.delay(0.05, function()
+			TABLE_TableIndirection["NearestGrab%0"]:Toggle(false);
+		end);
+		TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+		TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+		TABLE_TableIndirection["myChar%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character;
+		if (not TABLE_TableIndirection["myChar%0"] or not TABLE_TableIndirection["myChar%0"]:FindFirstChild("HumanoidRootPart")) then
+			return;
+		end
+		TABLE_TableIndirection["myHRP%0"] = TABLE_TableIndirection["myChar%0"].HumanoidRootPart;
+		local closestPlayer, closestDist = nil, math.huge;
+		for _, plr in pairs(TABLE_TableIndirection["Players%0"]:GetPlayers()) do
+			if ((plr ~= TABLE_TableIndirection["LocalPlayer%0"]) and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")) then
+				TABLE_TableIndirection["dist%0"] = (plr.Character.HumanoidRootPart.Position - TABLE_TableIndirection["myHRP%0"].Position).Magnitude;
+				if (TABLE_TableIndirection["dist%0"] < closestDist) then
+					closestDist = TABLE_TableIndirection["dist%0"];
+					closestPlayer = plr;
+				end
+			end
+		end
+		if closestPlayer then
+			TABLE_TableIndirection["targetHRP%0"] = closestPlayer.Character.HumanoidRootPart;
+			pcall(function()
+				TABLE_TableIndirection["targetHRP%0"]:SetNetworkOwner(TABLE_TableIndirection["LocalPlayer%0"]);
+			end);
+			TABLE_TableIndirection["targetHRP%0"].CFrame = TABLE_TableIndirection["myHRP%0"].CFrame + Vector3.new(1, 0, 0);
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+	TABLE_TableIndirection["UIS%0"] = game:GetService("UserInputService");
+	TABLE_TableIndirection["ReplicatedStorage%0"] = game:GetService("ReplicatedStorage");
+	TABLE_TableIndirection["Lighting%0"] = game:GetService("Lighting");
+	TABLE_TableIndirection["TweenService%0"] = game:GetService("TweenService");
+	TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+	TABLE_TableIndirection["Camera%0"] = workspace.CurrentCamera;
+	TABLE_TableIndirection["TEMP_FOLDER%0"] = workspace:WaitForChild("Temp");
+	TABLE_TableIndirection["BALL_NAME%0"] = "Ball";
+	TABLE_TableIndirection["ANIMATION_ID%0"] = "rbxassetid://18853355212";
+	TABLE_TableIndirection["KickRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("Kick");
+	TABLE_TableIndirection["SetCollisionRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("SetCollisionGroup");
+	TABLE_TableIndirection["PowerShotRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("PowerShot");
+	TABLE_TableIndirection["KICK_PARAMS_BASE%0"] = {Vector3.new(),nil,false,true,160.5,"Right",CFrame.new(262.50360107421875, 12.629940032958984, -18.665719985961914, 0.9999999403953552, 1.2247009e-8, 0.00030110677471384406, -1.2247551e-8, 1, 1.8031141e-9, -0.00030110677471384406, -1.8068019e-9, 0.9999999403953552)};
+	TABLE_TableIndirection["COLLISION_PARAMS%0"] = {0.917,"NoCharCollide"};
+	local function loadAnimation()
+		TABLE_TableIndirection["character%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character or TABLE_TableIndirection["LocalPlayer%0"].CharacterAdded:Wait();
+		TABLE_TableIndirection["humanoid%0"] = TABLE_TableIndirection["character%0"]:WaitForChild("Humanoid");
+		TABLE_TableIndirection["animator%0"] = TABLE_TableIndirection["humanoid%0"]:WaitForChild("Animator");
+		TABLE_TableIndirection["animation%0"] = Instance.new("Animation");
+		TABLE_TableIndirection["animation%0"].AnimationId = TABLE_TableIndirection["ANIMATION_ID%0"];
+		return TABLE_TableIndirection["animator%0"], TABLE_TableIndirection["animation%0"];
+	end
+	local animator, animation = loadAnimation();
+	TABLE_TableIndirection["LocalPlayer%0"].CharacterAdded:Connect(function(character)
+		character:WaitForChild("Humanoid");
+		animator, animation = loadAnimation();
+	end);
+	local function playPowerShotAnimation()
+		if (animator and animation) then
+			TABLE_TableIndirection["track%0"] = animator:LoadAnimation(animation);
+			TABLE_TableIndirection["track%0"]:Play();
+			delay(0.8, function()
+				if TABLE_TableIndirection["track%0"].IsPlaying then
+					TABLE_TableIndirection["track%0"]:Stop();
+				end
+			end);
+			return TABLE_TableIndirection["track%0"];
+		end
+		return nil;
+	end
+	local function applyDelayedKickBlur()
+		TABLE_TableIndirection["blur%0"] = TABLE_TableIndirection["Lighting%0"]:FindFirstChild("KickBlur") or Instance.new("BlurEffect");
+		TABLE_TableIndirection["blur%0"].Name = "KickBlur";
+		TABLE_TableIndirection["blur%0"].Size = 0;
+		TABLE_TableIndirection["blur%0"].Parent = TABLE_TableIndirection["Lighting%0"];
+		TABLE_TableIndirection["blur%0"].Size = 20;
+		TABLE_TableIndirection["tween%0"] = TABLE_TableIndirection["TweenService%0"]:Create(TABLE_TableIndirection["blur%0"], TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Size=0});
+		TABLE_TableIndirection["tween%0"]:Play();
+		TABLE_TableIndirection["tween%0"].Completed:Connect(function()
+			TABLE_TableIndirection["blur%0"]:Destroy();
+		end);
+	end
+	local function executePowerKick()
+		TABLE_TableIndirection["ball%0"] = TABLE_TableIndirection["TEMP_FOLDER%0"]:FindFirstChild(TABLE_TableIndirection["BALL_NAME%0"]);
+		if not TABLE_TableIndirection["ball%0"] then
+			return;
+		end
+		playPowerShotAnimation();
+		task.delay(0.25, applyDelayedKickBlur);
+		task.wait(0.2);
+		TABLE_TableIndirection["char%0"] = TABLE_TableIndirection["LocalPlayer%0"].Character;
+		TABLE_TableIndirection["hrp%0"] = TABLE_TableIndirection["char%0"] and TABLE_TableIndirection["char%0"]:FindFirstChild("HumanoidRootPart");
+		if not TABLE_TableIndirection["hrp%0"] then
+			return;
+		end
+		TABLE_TableIndirection["camVec%0"] = TABLE_TableIndirection["Camera%0"].CFrame.LookVector;
+		TABLE_TableIndirection["horizontalDirection%0"] = Vector3.new(TABLE_TableIndirection["camVec%0"].X, 0, TABLE_TableIndirection["camVec%0"].Z).Unit;
+		TABLE_TableIndirection["kickDirection%0"] = TABLE_TableIndirection["horizontalDirection%0"] * 170;
+		TABLE_TableIndirection["kickArgs%0"] = {TABLE_TableIndirection["kickDirection%0"],TABLE_TableIndirection["ball%0"],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][3],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][4],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][5],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][6],TABLE_TableIndirection["KICK_PARAMS_BASE%0"][7]};
+		task.wait(0.05);
+		TABLE_TableIndirection["SetCollisionRemote%0"]:FireServer(unpack(TABLE_TableIndirection["COLLISION_PARAMS%0"]));
+		TABLE_TableIndirection["PowerShotRemote%0"]:FireServer();
+		TABLE_TableIndirection["KickRemote%0"]:FireServer(unpack(TABLE_TableIndirection["kickArgs%0"]));
+	end
+	TABLE_TableIndirection["module%0"] = nil;
+	TABLE_TableIndirection["rightClickConnectionBegin%0"] = nil;
+	TABLE_TableIndirection["rightClickConnectionEnd%0"] = nil;
+	module = vape.Categories.Combat:CreateModule({Name="SuperShotpubs",Tooltip="boom",Default=false,Function=function(callback)
+		if callback then
+			TABLE_TableIndirection["rightClickConnectionBegin%0"] = TABLE_TableIndirection["UIS%0"].InputBegan:Connect(function(input, gpe)
+				if ((input.UserInputType == Enum.UserInputType.MouseButton2) and not gpe) then
+					TABLE_TableIndirection["start%0"] = tick();
+					TABLE_TableIndirection["active%0"] = true;
+					task.delay(0.8, function()
+						if (TABLE_TableIndirection["active%0"] and ((tick() - TABLE_TableIndirection["start%0"]) >= 0.8)) then
+							executePowerKick();
+						end
+					end);
+				end
+			end);
+			TABLE_TableIndirection["rightClickConnectionEnd%0"] = TABLE_TableIndirection["UIS%0"].InputEnded:Connect(function(input)
+				if (input.UserInputType == Enum.UserInputType.MouseButton2) then
+				end
+			end);
+		else
+			if TABLE_TableIndirection["rightClickConnectionBegin%0"] then
+				TABLE_TableIndirection["rightClickConnectionBegin%0"]:Disconnect();
+			end
+			if TABLE_TableIndirection["rightClickConnectionEnd%0"] then
+				TABLE_TableIndirection["rightClickConnectionEnd%0"]:Disconnect();
+			end
+		end
+	end});
+end);
+run(function()
+	TABLE_TableIndirection["uis%0"] = game:GetService("UserInputService");
+	TABLE_TableIndirection["rs%0"] = game:GetService("RunService");
+	TABLE_TableIndirection["ReplicatedStorage%0"] = game:GetService("ReplicatedStorage");
+	TABLE_TableIndirection["Players%0"] = game:GetService("Players");
+	TABLE_TableIndirection["Workspace%0"] = game:GetService("Workspace");
+	TABLE_TableIndirection["nutmegRemote%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:WaitForChild("Remotes"):WaitForChild("NutmegCD");
+	TABLE_TableIndirection["ballStatus%0"] = TABLE_TableIndirection["Workspace%0"]:WaitForChild("ballStatus");
+	TABLE_TableIndirection["LocalPlayer%0"] = TABLE_TableIndirection["Players%0"].LocalPlayer;
+	local function deleteMegSound()
+		TABLE_TableIndirection["name%0"] = "notification_sound_previs1";
+		TABLE_TableIndirection["sources%0"] = {TABLE_TableIndirection["ReplicatedStorage%0"]:FindFirstChild("UISounds"),TABLE_TableIndirection["Workspace%0"]};
+		for _, container in ipairs(TABLE_TableIndirection["sources%0"]) do
+			if (container and container:FindFirstChild(TABLE_TableIndirection["name%0"])) then
+				pcall(function()
+					container[TABLE_TableIndirection["name%0"]]:Destroy();
+				end);
+			end
+		end
+	end
+	deleteMegSound();
+	TABLE_TableIndirection["running%0"] = false;
+	TABLE_TableIndirection["conn%0"] = nil;
+	TABLE_TableIndirection["iNfinitePoints%0"] = vape.Categories.Blatant:CreateModule({Name="Dupe",Tooltip="Thousands of points a touch",Function=function(callback)
+		TABLE_TableIndirection["running%0"] = callback;
+		if TABLE_TableIndirection["conn%0"] then
+			pcall(function()
+				TABLE_TableIndirection["conn%0"]:Disconnect();
+			end);
+			TABLE_TableIndirection["conn%0"] = nil;
+		end
+		if callback then
+			TABLE_TableIndirection["conn%0"] = TABLE_TableIndirection["rs%0"].RenderStepped:Connect(function()
+				TABLE_TableIndirection["lastKicker%0"] = TABLE_TableIndirection["ballStatus%0"]:FindFirstChild("lastKicked");
+				if (TABLE_TableIndirection["lastKicker%0"] and (TABLE_TableIndirection["lastKicker%0"].Value == TABLE_TableIndirection["LocalPlayer%0"])) then
+					pcall(function()
+						TABLE_TableIndirection["nutmegRemote%0"]:FireServer(TABLE_TableIndirection["LocalPlayer%0"]);
+					end);
+				end
+			end);
+		end
+	end});
+end);
+
+run(function()
+	local RunService = game:GetService("RunService")
+
+	local function clearEffects(ball)
+		if not ball then return end
+		for _, v in ipairs(ball:GetChildren()) do
+			if v:IsA("ParticleEmitter") or v:IsA("Fire") or v:IsA("Sparkles") then
+				v:Destroy()
+			end
+		end
+		local marker = ball:FindFirstChild("BallEffectsApplied")
+		if marker then marker:Destroy() end
+	end
+
+	local function applyEffects(ball)
+		if not ball or not ball:IsA("BasePart") or ball:FindFirstChild("BallEffectsApplied") then return end
+
+		local marker = Instance.new("BoolValue")
+		marker.Name = "BallEffectsApplied"
+		marker.Value = true
+		marker.Parent = ball
+
+		local fire = Instance.new("Fire")
+		fire.Size = 5
+		fire.Heat = 10
+		fire.Color = Color3.new(1, 0.4, 0)
+		fire.SecondaryColor = Color3.new(1, 1, 0)
+		fire.Parent = ball
+
+		local sparkles = Instance.new("Sparkles")
+		sparkles.SparkleColor = Color3.new(1, 1, 1)
+		sparkles.Parent = ball
+
+		local particle = Instance.new("ParticleEmitter")
+		particle.Texture = "rbxassetid://296874871"
+		particle.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(1, 0)
+		})
+		particle.Rate = 25
+		particle.Lifetime = NumberRange.new(1, 2)
+		particle.Speed = NumberRange.new(3, 6)
+		particle.Rotation = NumberRange.new(0, 360)
+		particle.RotSpeed = NumberRange.new(-90, 90)
+		particle.Color = ColorSequence.new(Color3.new(1, 0, 0), Color3.new(1, 1, 0))
+		particle.LightEmission = 1
+		particle.Transparency = NumberSequence.new(0.3)
+		particle.Parent = ball
+	end
+
+	local BallEffects = vape.Categories.Render:CreateModule({
+		Name = "BallEffects",
+		Tooltip = "hi this floor i hope u like this effects they are my faborites",
+		Function = function(enabled)
+			if enabled then
+				RunService:BindToRenderStep("BallEffectsV4", 201, function()
+					local ball = workspace:FindFirstChild("Temp") and workspace.Temp:FindFirstChild("Ball")
+					if ball then
+						applyEffects(ball)
+					end
+				end)
+			else
+				RunService:UnbindFromRenderStep("BallEffectsV4")
+				local ball = workspace:FindFirstChild("Temp") and workspace.Temp:FindFirstChild("Ball")
+				if ball then
+					clearEffects(ball)
+				end
+			end
+		end
+	})
+end)
+
+
+
+FPSUnlocker = vape.Categories.Utility:CreateModule({
+    Name = "FPSUnlocker",
+    Function = function(callback)
+        if callback then
+			setfpscap(99999999)
+        end
+    end,
+    Tooltip = "Insanly Simple fps unlocker"
+})
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+vape.Categories.Utility:CreateModule({
+    Name = "AntiLagBack",
+    Function = function(callback)
+        local conn
+        if callback then
+            conn = RunService.Heartbeat:Connect(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    sethiddenproperty(hrp, "NetworkIsSleeping", true)
+                    hrp.Velocity = hrp.Velocity + Vector3.new(0.01, 0, 0)
+                end
+            end)
+        else
+            if conn then conn:Disconnect() end
+        end
+    end,
+    Tooltip = "Prevents server from lagbacking you after teleport or physics abuse"
+})
+
+run(function()
+    local BallRideConnection
+    local speed = 40
+    local radiusOffset = 3
+    local heightOffset = 4
+
+    vape.Categories.World:CreateModule({
+        Name = "BallRide",
+        Tooltip = "Hoverboard Simulator",
+        Function = function(callback)
+            if callback then
+                BallRideConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                    local LocalPlayer = game:GetService("Players").LocalPlayer
+                    local character = LocalPlayer.Character
+                    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                    local ball = workspace:FindFirstChild("Temp") and workspace.Temp:FindFirstChild("Ball")
+
+                    if hrp and ball then
+                        local forward = hrp.CFrame.LookVector
+                        local sideOffset = Vector3.new(forward.X, 0, forward.Z).Unit * radiusOffset
+                        local targetPos = ball.Position + sideOffset + Vector3.new(0, heightOffset, 0)
+
+                        if (hrp.Position - ball.Position).Magnitude < 10 then
+                            hrp.CFrame = CFrame.new(targetPos, ball.Position + forward * 5)
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+
+                            local push = sideOffset.Unit * speed
+                            ball.AssemblyLinearVelocity = Vector3.new(push.X, ball.AssemblyLinearVelocity.Y, push.Z)
+                        end
+                    end
+                end)
+            else
+                if BallRideConnection then
+                    BallRideConnection:Disconnect()
+                    BallRideConnection = nil
+                end
+
+                local LocalPlayer = game:GetService("Players").LocalPlayer
+                local character = LocalPlayer.Character
+                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+                if hrp then
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.CFrame = hrp.CFrame + Vector3.new(0, -0.1, 0)
+                end
+
+                if humanoid then
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end
+        end
+    })
+end)
+
+run(function()
+	local highlightBallModule = {["Enabled"] = false}
+	local currentColor = Color3.fromRGB(255, 0, 0)
+
+	highlightBallModule = vape.Categories.Render:CreateModule({
+		["Name"] = "HighlightBall",
+		["Description"] = "Chams the ball through parts.",
+		["Function"] = function(callback)
+			highlightBallModule.Enabled = callback
+
+			if callback then
+				task.spawn(function()
+					while highlightBallModule.Enabled do
+						local temp = workspace:FindFirstChild("Temp")
+						local ball = temp and temp:FindFirstChild("Ball")
+
+						if ball then
+							local highlight = Instance.new("Highlight")
+							highlight.Name = "TempBallHighlight"
+							highlight.FillColor = currentColor
+							highlight.OutlineColor = currentColor
+							highlight.FillTransparency = 0.5
+							highlight.OutlineTransparency = 0
+
+							if ball:IsA("BasePart") or ball:IsA("Model") then
+								highlight.Adornee = ball
+							else
+								local part = ball:FindFirstChildWhichIsA("BasePart", true)
+								if part then
+									highlight.Adornee = part
+								end
+							end
+
+							highlight.Parent = game:GetService("CoreGui")
+							task.wait(0.5)
+							highlight:Destroy()
+						else
+							task.wait(0.5)
+						end
+					end
+				end)
+			end
+		end
+	})
+
+	highlightBallModule:CreateColorSlider({
+		["Name"] = "Highlight Color",
+		["Function"] = function(h, s, v)
+			currentColor = Color3.fromHSV(h, s, v)
+		end,
+		["Default"] = Color3.fromRGB(255, 0, 0)
+	})
+end)
+
+run(function()
+	local a, b, c = {}, game.GetService, setmetatable
+	local d = b(game, "\80\108\97\121\101\114\115")["LocalPlayer"]
+	local e = b(game, "\82\117\110\83\101\114\118\105\99\101")
+	local f, g = nil, nil
+
+	a = vape.Categories["\87\111\114\108\100"]:CreateModule({
+		["Name"] = "InfiniteStamina",
+		["Tooltip"] = "stamina bar full forever",
+		["Function"] = function(h)
+			a["Enabled"] = h
+			if f then pcall(function() f:Disconnect() end) end
+			if g then pcall(function() g:Disconnect() end) end
+			if not h then return end
+
+			local function i(j)
+				task.defer(function()
+					local k = j:FindFirstChild("\83\116\97\116\115") or j:WaitForChild("\83\116\97\116\115", 5)
+					if not k then return end
+
+					local l = {k:FindFirstChild("\83\116\97\109\105\110\97"), k:FindFirstChild("\83\116\97\109\105\110\97\67\104\101\99\107"), k:FindFirstChild("\77\97\120\83\116\97\109\105\110\97")}
+					for x=1,#l do if not l[x] then return end end
+
+					f = e["\82\101\110\100\101\114\83\116\101\112\112\101\100"]:Connect(function()
+						for _, m in next, l do
+							if m and m.Value ~= 10^2 then
+								pcall(function() m.Value = 10^2 end)
+							end
+						end
+					end)
+				end)
+			end
+
+			if d.Character then i(d.Character) end
+			g = d.CharacterAdded:Connect(function(n)
+				if a["Enabled"] then i(n) end
+			end)
+		end
+	})
+end)
+
+local obf_bitlib = bit32 or bit;
+local obf_XOR = obf_bitlib.bxor;
+local obf_OR = obf_bitlib.bor;
+local obf_AND = obf_bitlib.band;
+local TABLE_TableIndirection = {};
+bit32 = {};
+TABLE_TableIndirection["N%0"] = 32;
+TABLE_TableIndirection["P%0"] = 2 ^ TABLE_TableIndirection["N%0"];
+bit32.bnot = function(x)
+	x = x % TABLE_TableIndirection["P%0"];
+	return (TABLE_TableIndirection["P%0"] - 1) - x;
+end;
+bit32.band = function(x, y)
+	if ((272 == 272) and (y == 255)) then
+		return x % 256;
+	end
+	if ((100 <= 3123) and ((y == 65535) or (4593 <= 2672))) then
+		return x % 65536;
+	end
+	if ((y == 4294967295) or (1369 > 4987)) then
+		return x % 4294967296;
+	end
+	x, y = x % TABLE_TableIndirection["P%0"], y % TABLE_TableIndirection["P%0"];
+	TABLE_TableIndirection["r%0"] = 0;
+	TABLE_TableIndirection["p%0"] = 1;
+	for i = 1, TABLE_TableIndirection["N%0"] do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if (((obf_AND(a, b) + obf_OR(a, b)) == 2) or (1168 > 3156) or (863 >= 4584)) then
+			TABLE_TableIndirection["r%0"] = TABLE_TableIndirection["r%0"] + TABLE_TableIndirection["p%0"];
+		end
+		TABLE_TableIndirection["p%0"] = 2 * TABLE_TableIndirection["p%0"];
+	end
+	return TABLE_TableIndirection["r%0"];
+end;
+bit32.bor = function(x, y)
+	if ((y == 255) or (724 >= 1668)) then
+		return obf_AND(x - (x % 256), 255) + obf_OR(x - (x % 256), 255);
+	end
+	if ((428 < 1804) and ((y == 65535) or (572 > 4486))) then
+		return obf_AND(x - (x % 65536), 65535) + obf_OR(x - (x % 65536), 65535);
+	end
+	if ((y == 4294967295) or (3325 > 4613)) then
+		return 4294967295;
+	end
+	x, y = x % TABLE_TableIndirection["P%0"], y % TABLE_TableIndirection["P%0"];
+	TABLE_TableIndirection["r%0"] = 0;
+	TABLE_TableIndirection["p%0"] = 1;
+	for i = 1, TABLE_TableIndirection["N%0"] do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if ((1404 == 1404) and ((a + b) >= 1)) then
+			TABLE_TableIndirection["r%0"] = TABLE_TableIndirection["r%0"] + TABLE_TableIndirection["p%0"];
+		end
+		TABLE_TableIndirection["p%0"] = 2 * TABLE_TableIndirection["p%0"];
+	end
+	return TABLE_TableIndirection["r%0"];
+end;
+bit32.bxor = function(x, y)
+	x, y = x % TABLE_TableIndirection["P%0"], y % TABLE_TableIndirection["P%0"];
+	TABLE_TableIndirection["r%0"] = 0;
+	TABLE_TableIndirection["p%0"] = 1;
+	for i = 1, TABLE_TableIndirection["N%0"] do
+		local a, b = x % 2, y % 2;
+		x, y = math.floor(x / 2), math.floor(y / 2);
+		if (((obf_AND(a, b) + obf_OR(a, b)) == 1) or (4950 <= 4553)) then
+			TABLE_TableIndirection["r%0"] = obf_AND(TABLE_TableIndirection["r%0"], TABLE_TableIndirection["p%0"]) + obf_OR(TABLE_TableIndirection["r%0"], TABLE_TableIndirection["p%0"]);
+		end
+		TABLE_TableIndirection["p%0"] = 2 * TABLE_TableIndirection["p%0"];
+	end
+	return TABLE_TableIndirection["r%0"];
+end;
+bit32.lshift = function(x, s_amount)
+	if ((2665 <= 3933) and (math.abs(s_amount) >= TABLE_TableIndirection["N%0"])) then
+		return 0;
+	end
+	x = x % TABLE_TableIndirection["P%0"];
+	if (s_amount < 0) then
+		return math.floor(x * (2 ^ s_amount));
+	else
+		return (x * (2 ^ s_amount)) % TABLE_TableIndirection["P%0"];
+	end
+end;
+bit32.rshift = function(x, s_amount)
+	if ((3273 == 3273) and (math.abs(s_amount) >= TABLE_TableIndirection["N%0"])) then
+		return 0;
+	end
+	x = x % TABLE_TableIndirection["P%0"];
+	if ((s_amount > 0) or (3748 < 2212)) then
+		return math.floor(x * (2 ^ -s_amount));
+	else
+		return (x * (2 ^ -s_amount)) % TABLE_TableIndirection["P%0"];
+	end
+end;
+bit32.arshift = function(x, s_amount)
+	if ((math.abs(s_amount) >= TABLE_TableIndirection["N%0"]) or (1180 == 2180)) then
+		return 0;
+	end
+	x = x % TABLE_TableIndirection["P%0"];
+	if (s_amount > 0) then
+		TABLE_TableIndirection["add%0"] = 0;
+		if ((3824 > 409) and (4090 < 4653) and (x >= (TABLE_TableIndirection["P%0"] / 2))) then
+			TABLE_TableIndirection["add%0"] = TABLE_TableIndirection["P%0"] - (2 ^ (TABLE_TableIndirection["N%0"] - s_amount));
+		end
+		return obf_AND(math.floor(x * (2 ^ -s_amount)), TABLE_TableIndirection["add%0"]) + obf_OR(math.floor(x * (2 ^ -s_amount)), TABLE_TableIndirection["add%0"]);
+	else
+		return (x * (2 ^ -s_amount)) % TABLE_TableIndirection["P%0"];
+	end
+end;
+run(function()
+	local Module, SizeSlider, fakeMesh = nil, nil, nil;
+	TABLE_TableIndirection["connection%0"] = nil;
+	local function disableAnticheat()
+		TABLE_TableIndirection["ReplicatedStorage%0"] = game:GetService("ReplicatedStorage");
+		TABLE_TableIndirection["remotesFolder%0"] = TABLE_TableIndirection["ReplicatedStorage%0"]:FindFirstChild("Remotes");
+		if ((2087 == 2087) and not TABLE_TableIndirection["remotesFolder%0"]) then
+			TABLE_TableIndirection["remotesFolder%0"] = Instance.new("Folder");
+			TABLE_TableIndirection["remotesFolder%0"]['Name'] = "Remotes";
+			TABLE_TableIndirection["remotesFolder%0"]['Parent'] = TABLE_TableIndirection["ReplicatedStorage%0"];
+		end
+		TABLE_TableIndirection["remoteName%0"] = "touchdelaybenchmark";
+		TABLE_TableIndirection["existing%0"] = TABLE_TableIndirection["remotesFolder%0"]:FindFirstChild(TABLE_TableIndirection["remoteName%0"]);
+		if TABLE_TableIndirection["existing%0"] then
+			TABLE_TableIndirection["existing%0"]:Destroy();
+		end
+		TABLE_TableIndirection["newRemote%0"] = Instance.new("RemoteEvent");
+		TABLE_TableIndirection["newRemote%0"]['Name'] = TABLE_TableIndirection["remoteName%0"];
+		TABLE_TableIndirection["newRemote%0"]['Parent'] = TABLE_TableIndirection["remotesFolder%0"];
+	end
+	local function applySizeAndSpoof(val)
+		TABLE_TableIndirection["ball%0"] = workspace:FindFirstChild("Temp") and workspace['Temp']:FindFirstChild("Ball");
+		if (not TABLE_TableIndirection["ball%0"] or not TABLE_TableIndirection["ball%0"]:IsA("BasePart") or (2652 < 196)) then
+			return;
+		end
+		TABLE_TableIndirection["ball%0"]['Size'] = Vector3.new(val, val, val);
+		if (not fakeMesh or (fakeMesh['Parent'] ~= TABLE_TableIndirection["ball%0"])) then
+			TABLE_TableIndirection["existing%0"] = TABLE_TableIndirection["ball%0"]:FindFirstChild("VisualSizeSpoofer");
+			if TABLE_TableIndirection["existing%0"] then
+				TABLE_TableIndirection["existing%0"]:Destroy();
+			end
+			fakeMesh = Instance.new("SpecialMesh");
+			fakeMesh['MeshType'] = Enum['MeshType']['Sphere'];
+			fakeMesh['Name'] = "VisualSizeSpoofer";
+			fakeMesh['Parent'] = TABLE_TableIndirection["ball%0"];
+		end
+		TABLE_TableIndirection["spoofScale%0"] = 1 / val;
+		fakeMesh['Scale'] = Vector3.new(TABLE_TableIndirection["spoofScale%0"], TABLE_TableIndirection["spoofScale%0"], TABLE_TableIndirection["spoofScale%0"]);
+	end
+	Module = vape['Categories']['Blatant']:CreateModule({Name="HitboxExtender",Tooltip="Have fun getting votekicked lol",Default=false,Function=function(enabled)
+		TABLE_TableIndirection["ball%0"] = workspace:FindFirstChild("Temp") and workspace['Temp']:FindFirstChild("Ball");
+		if (((4135 < 4817) and (not TABLE_TableIndirection["ball%0"] or not TABLE_TableIndirection["ball%0"]:IsA("BasePart"))) or (3404 > 4503)) then
+			return;
+		end
+		if enabled then
+			disableAnticheat();
+			TABLE_TableIndirection["connection%0"] = game:GetService("RunService")['RenderStepped']:Connect(function()
+				applySizeAndSpoof(SizeSlider.Value);
+			end);
+			if ((vape and vape['CreateNotification']) or (3506 <= 1309)) then
+				vape:CreateNotification("", "Anticheat disabled & HBE active.", 5, "success");
+			end
+		else
+			if ((2955 == 2955) and TABLE_TableIndirection["connection%0"]) then
+				TABLE_TableIndirection["connection%0"]:Disconnect();
+				TABLE_TableIndirection["connection%0"] = nil;
+			end
+			TABLE_TableIndirection["ball%0"]['Size'] = Vector3.new(1, 1, 1);
+			TABLE_TableIndirection["mesh%0"] = TABLE_TableIndirection["ball%0"]:FindFirstChild("VisualSizeSpoofer");
+			if (TABLE_TableIndirection["mesh%0"] or (2903 == 1495)) then
+				TABLE_TableIndirection["mesh%0"]:Destroy();
+			end
+			fakeMesh = nil;
+		end
+	end,ExtraText=function()
+		return tostring(SizeSlider.Value) .. " size";
+	end});
+	SizeSlider = Module:CreateSlider({Name="Size",Min=1,Max=30,Default=5,Suffix=function(val)
+		return ((val == 1) and "stud") or "studs";
+	end,Function=function(val)
+		if Module['Enabled'] then
+			applySizeAndSpoof(val);
+		end
+	end});
+end);
+	
+			
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+vape.Categories.Utility:CreateModule({
+	Name = "RemoteDisabler",
+	Function = function(callback)
+		if callback then
+			for _, v in ipairs(getgc(true)) do
+				if typeof(v) == "Instance" and v:IsA("RemoteEvent") and v.Name:lower():find("kick") then
+					v.Destroy = function() end
+					v.FireServer = function() end
+					warn("[RemoteDisabler] Blocked: "..v.Name)
+				end
+			end
+		end
+	end,
+	Tooltip = "Blocks RemoteEvents with suspicious names like Kick or Report"
+})
+
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+vape.Categories.Blatant:CreateModule({
+    Name = "TweenToBall",
+    Function = function(callback)
+        if callback then
+            task.spawn(function()
+                repeat task.wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local ball = Workspace:FindFirstChild("Temp") and Workspace.Temp:FindFirstChild("Ball")
+
+                if hrp and ball then
+                    local goal = { CFrame = ball.CFrame + Vector3.new(0, 5, 0) }
+                    local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Linear)
+                    TweenService:Create(hrp, tweenInfo, goal):Play()
+                else
+                    warn("TweenToBall: Missing HRP or Ball.")
+                end
+            end)
+        end
+    end,
+    Tooltip = "Smoothly tweens you to the Ball"
+})
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local conn
+
+vape.Categories.Combat:CreateModule({
+    Name = "NetworkReach FSF",
+    Function = function(callback)
+        if callback then
+            conn = RunService.Heartbeat:Connect(function()
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character then
+                        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            pcall(function()
+                                sethiddenproperty(hrp, "NetworkOwnershipRule", Enum.NetworkOwnership.Manual)
+                                hrp:SetNetworkOwner(LocalPlayer)
+                            end)
+                        end
+                    end
+                end
+            end)
+        else
+            if conn then
+                conn:Disconnect()
+                conn = nil
+            end
+        end
+    end,
+    Tooltip = "forces network ownership on enemy root parts"
+})
+
+run(function()
+	local GrassCustomizer = vape.Categories.Render:CreateModule({
+		Name = "GrassCustomizer",
+		Description = "Change grass material"
+	})
+
+	local allMaterials = {}
+	for _, mat in ipairs(Enum.Material:GetEnumItems()) do
+		table.insert(allMaterials, mat.Name)
+	end
+
+	GrassCustomizer:CreateDropdown({
+		Name = "Material",
+		List = allMaterials,
+		Default = "Grass",
+		Function = function(val)
+			local field = workspace:FindFirstChild("gameArea")
+				and workspace.gameArea:FindFirstChild("Grass")
+				and workspace.gameArea.Grass:FindFirstChild("FieldBase")
+
+			if field and typeof(Enum.Material[val]) == "EnumItem" then
+				field.Material = Enum.Material[val]
+			end
+		end
+	})
+
+	GrassCustomizer:CreateSlider({
+		Name = "Reflectance",
+		Min = 0,
+		Max = 1,
+		Default = 0,
+		Decimal = 100,
+		Suffix = function(val)
+			return tostring(val)
+		end,
+		Function = function(val)
+			local field = workspace:FindFirstChild("gameArea")
+				and workspace.gameArea:FindFirstChild("Grass")
+				and workspace.gameArea.Grass:FindFirstChild("FieldBase")
+
+			if field and field:IsA("BasePart") then
+				field.Reflectance = val
+			end
+		end
+	})
+end)
+						
+run(function()
+	local RunService = game:GetService("RunService")
+	local Workspace = game:GetService("Workspace")
+
+	local BALL_NAME = "Ball"
+	local TEMP_FOLDER = Workspace:WaitForChild("Temp")
+	local GRAVITY = Workspace.Gravity
+	local FLOOR_Y = 9.6
+	local LOOKAHEAD_STEP = 0.04
+	local VELOCITY_HISTORY_SIZE = 32
+
+	local ball = nil
+	local velocityHistory = {}
+	local trajectoryParts = {}
+	local trapZoneMarker = nil
+	local heartbeatConnection = nil
+
+	local currentTrailColor = Color3.fromRGB(0, 170, 255)
+	local currentLandingColor = Color3.fromRGB(255, 0, 0)
+
+	local module = vape.Categories.Render:CreateModule({
+		Name = "BallTrajectory",
+		Tooltip = "Tries to recreate a trail predicting the balls landing",
+		Function = function(callback)
+			if callback then
+				findBall()
+				resetMarkers()
+				setupTrapMarker()
+
+				heartbeatConnection = RunService.Heartbeat:Connect(function()
+					if not ball or not ball:IsDescendantOf(Workspace) then
+						hideAll()
+						findBall()
+						return
+					end
+
+					updateVelocityHistory(ball.Position)
+					local vel = getSmoothedVelocity()
+					local pos = ball.Position
+
+					for i, dot in ipairs(trajectoryParts) do
+						local t = LOOKAHEAD_STEP * i
+						local predicted = predictPosition(pos, vel, t)
+						dot.Position = predicted
+						dot.Transparency = 0.25
+						dot.Color = currentTrailColor
+					end
+
+					local finalPredicted = predictPosition(pos, vel, LOOKAHEAD_STEP)
+					if trapZoneMarker then
+						trapZoneMarker.Position = Vector3.new(finalPredicted.X, FLOOR_Y, finalPredicted.Z)
+						trapZoneMarker.Transparency = 0.5
+						trapZoneMarker.Color = currentLandingColor
+					end
+				end)
+			else
+
+				if heartbeatConnection then
+					heartbeatConnection:Disconnect()
+					heartbeatConnection = nil
+				end
+
+				for _, dot in ipairs(trajectoryParts) do
+					if dot and dot.Parent then dot:Destroy() end
+				end
+				trajectoryParts = {}
+
+				if trapZoneMarker and trapZoneMarker.Parent then
+					trapZoneMarker:Destroy()
+					trapZoneMarker = nil
+				end
+
+				velocityHistory = {}
+				ball = nil
+			end
+		end
+	})
+
+	module:CreateColorSlider({
+		Name = "Trail Color",
+		Default = currentTrailColor,
+		Function = function(h, s, v)
+			currentTrailColor = Color3.fromHSV(h, s, v)
+			for _, dot in ipairs(trajectoryParts) do
+				if dot and dot:IsA("BasePart") then
+					dot.Color = currentTrailColor
+				end
+			end
+		end
+	})
+
+	module:CreateColorSlider({
+		Name = "Landing Color",
+		Default = currentLandingColor,
+		Function = function(h, s, v)
+			currentLandingColor = Color3.fromHSV(h, s, v)
+			if trapZoneMarker and trapZoneMarker:IsA("BasePart") then
+				trapZoneMarker.Color = currentLandingColor
+			end
+		end
+	})
+
+	function hideAll()
+		for _, dot in ipairs(trajectoryParts) do
+			dot.Transparency = 1
+		end
+		if trapZoneMarker then
+			trapZoneMarker.Transparency = 1
+		end
+	end
+
+	function resetMarkers()
+		for _, v in ipairs(trajectoryParts) do
+			if v then v:Destroy() end
+		end
+		trajectoryParts = {}
+		for i = 1, 30 do
+			local dot = Instance.new("Part")
+			dot.Anchored = true
+			dot.CanCollide = false
+			dot.Size = Vector3.new(0.4, 0.4, 0.4)
+			dot.Shape = Enum.PartType.Ball
+			dot.Material = Enum.Material.Neon
+			dot.Color = currentTrailColor
+			dot.Transparency = 1
+			dot.Name = "TrajectoryDot"
+			dot.Parent = Workspace
+			table.insert(trajectoryParts, dot)
+		end
+	end
+
+	function setupTrapMarker()
+		if trapZoneMarker then trapZoneMarker:Destroy() end
+		trapZoneMarker = Instance.new("Part")
+		trapZoneMarker.Anchored = true
+		trapZoneMarker.CanCollide = false
+		trapZoneMarker.Size = Vector3.new(3, 0.2, 3)
+		trapZoneMarker.Transparency = 1
+		trapZoneMarker.Color = currentLandingColor
+		trapZoneMarker.Material = Enum.Material.Neon
+		trapZoneMarker.Name = "TrapZoneESP"
+		trapZoneMarker.Shape = Enum.PartType.Block
+		trapZoneMarker.Parent = Workspace
+	end
+
+	function updateVelocityHistory(pos)
+		table.insert(velocityHistory, pos)
+		if #velocityHistory > VELOCITY_HISTORY_SIZE then
+			table.remove(velocityHistory, 1)
+		end
+	end
+
+	function getSmoothedVelocity()
+		if #velocityHistory < 2 then return Vector3.zero end
+		local dt = (#velocityHistory - 1) / 60
+		return (velocityHistory[#velocityHistory] - velocityHistory[1]) / dt
+	end
+
+	function predictPosition(pos, vel, t)
+		local gravity = Vector3.new(0, -GRAVITY, 0)
+		return pos + vel * t + 0.5 * gravity * t * t
+	end
+
+	function findBall()
+		ball = TEMP_FOLDER:FindFirstChild(BALL_NAME)
+	end
+
+	TEMP_FOLDER.ChildAdded:Connect(function(child)
+		if child.Name == BALL_NAME then
+			ball = child
+		end
+	end)
+
+	TEMP_FOLDER.ChildRemoved:Connect(function(child)
+		if child == ball then
+			ball = nil
+		end
+	end)
+end)
+																								
 run(function()
 	local Freecam
 	local Value
@@ -7921,4 +10374,3 @@ run(function()
 	})
 	
 end)
-	
