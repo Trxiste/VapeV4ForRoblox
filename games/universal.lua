@@ -3085,6 +3085,9 @@ run(function()
 	local matchState = "Waiting"                                                      
 	local lastTimeChange = tick()
 	local gameTimeUnchangedFrames = 0
+	local clockStopped = false
+	local paceResumeTime = 0
+	local CLOCK_STOP_DELAY = 20
 
 	local function updateCamera()
 		gameCamera = Workspace.CurrentCamera or Workspace:FindFirstChildWhichIsA("Camera")
@@ -3161,8 +3164,28 @@ run(function()
 	end
 
 	local function isTimerActive()
-		                                
 		if not hasGameStarted.Value then
+			clockStopped = false
+			paceResumeTime = 0
+			return false
+		end
+
+		local now = tick()
+		if lastGameTime >= 0 and gameTime.Value == lastGameTime then
+			gameTimeUnchangedFrames = gameTimeUnchangedFrames + 1
+			if gameTimeUnchangedFrames > 120 then
+				clockStopped = true
+			end
+		else
+			if clockStopped and lastGameTime >= 0 then
+				paceResumeTime = now + CLOCK_STOP_DELAY
+			end
+			clockStopped = false
+			gameTimeUnchangedFrames = 0
+			lastGameTime = gameTime.Value
+		end
+
+		if clockStopped or now < paceResumeTime then
 			return false
 		end
 
@@ -3170,7 +3193,6 @@ run(function()
 			return false
 		end
 
-		                                                                 
 		if ReplicatedStorage:FindFirstChild("MatchState") then
 			local state = ReplicatedStorage.MatchState.Value
 			if state == "Goal" or state == "Halftime" or state == "FullTime" or state == "PenaltyShootout" then
@@ -3178,22 +3200,18 @@ run(function()
 			end
 		end
 
-		                                             
 		if ReplicatedStorage:FindFirstChild("GoalCelebration") or ReplicatedStorage:FindFirstChild("goalScored") then
 			return false
 		end
 
-		                                                  
 		if ReplicatedStorage:FindFirstChild("GamePaused") and ReplicatedStorage.GamePaused.Value then
 			return false
 		end
 
-		                                                       
 		if ReplicatedStorage:FindFirstChild("CutsceneActive") and ReplicatedStorage.CutsceneActive.Value then
 			return false
 		end
 
-		                                             
 		if ReplicatedStorage:FindFirstChild("ShowHalftimeScreen") and ReplicatedStorage.ShowHalftimeScreen.Value then
 			return false
 		end
@@ -3202,31 +3220,16 @@ run(function()
 			return false
 		end
 
-		                                                                                
 		if ReplicatedStorage:FindFirstChild("KickoffActive") and ReplicatedStorage.KickoffActive.Value then
 			return false
 		end
 
-		                                                                        
 		if ReplicatedStorage:FindFirstChild("BallPlacement") and ReplicatedStorage.BallPlacement.Value then
 			return false
 		end
 
-		                                                                                                                          
-		if lastGameTime >= 0 and gameTime.Value == lastGameTime then
-			gameTimeUnchangedFrames = gameTimeUnchangedFrames + 1
-			                                                                                      
-			if gameTimeUnchangedFrames > 120 and hasGameStarted.Value then
-				return false
-			end
-		else
-			gameTimeUnchangedFrames = 0
-			lastGameTime = gameTime.Value
-		end
-
 		return true
 	end
-
 	local function calculateMoveVector(vec)
 		if not gameCamera then
 			updateCamera()
@@ -3322,6 +3325,8 @@ run(function()
 				                       
 				lastGameTime = -1
 				gameTimeUnchangedFrames = 0
+				clockStopped = false
+				paceResumeTime = 0
 
 				Pace:Clean(RunService.PreSimulation:Connect(onSpeed))
 
@@ -3396,6 +3401,8 @@ run(function()
 				ShiftHeld = false
 				lastGameTime = -1
 				gameTimeUnchangedFrames = 0
+				clockStopped = false
+				paceResumeTime = 0
 				wPressTime = 0
 				wHeldDuration = 0
 				speedActive = false
@@ -3433,6 +3440,8 @@ run(function()
 		ShiftHeld = false
 		lastGameTime = -1
 		gameTimeUnchangedFrames = 0
+		clockStopped = false
+		paceResumeTime = 0
 		wPressTime = 0
 		wHeldDuration = 0
 		speedActive = false
