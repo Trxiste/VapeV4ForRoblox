@@ -4328,7 +4328,7 @@ end)
 
 
 run(function()
-    local Tractories
+    local Trajectories
 
     local Players = game:GetService("Players")
     local RunService = game:GetService("RunService")
@@ -4726,7 +4726,7 @@ run(function()
         end
 
         VisualFolder = Instance.new("Folder")
-        VisualFolder.Name = "VapeV4_DeveloperBallTractories"
+        VisualFolder.Name = "VapeV4_DeveloperBallTrajectories"
         VisualFolder.Parent = Workspace
 
         return VisualFolder
@@ -4791,7 +4791,7 @@ run(function()
 
     local function createDot(index)
         local dot = Instance.new("Part")
-        dot.Name = "TractoriesDot_" .. tostring(index)
+        dot.Name = "TrajectoriesDot_" .. tostring(index)
         dot.Shape = Enum.PartType.Ball
         dot.Anchored = true
         dot.CanCollide = false
@@ -4821,7 +4821,7 @@ run(function()
         end
 
         LandingDot = Instance.new("Part")
-        LandingDot.Name = "TractoriesLandingDot"
+        LandingDot.Name = "TrajectoriesLandingDot"
         LandingDot.Shape = Enum.PartType.Ball
         LandingDot.Anchored = true
         LandingDot.CanCollide = false
@@ -5466,31 +5466,42 @@ run(function()
         Enabled = true
         ensureFolder()
 
+        if RenderConnection then
+            RenderConnection:Disconnect()
+            RenderConnection = nil
+        end
+
         RenderConnection = RunService.RenderStepped:Connect(update)
     end
 
     local function stop()
         Enabled = false
+
+        if RenderConnection then
+            RenderConnection:Disconnect()
+            RenderConnection = nil
+        end
+
         clearVisuals()
     end
 
     local category = getCategory()
-if not category or not category.CreateModule then return end
+    if not category or not category.CreateModule then return end
 
-Trajectories = category:CreateModule({
-    Name = "Trajectories",
-    Function = function(callback)
-        if callback then
-            start()
-        else
-            stop()
-        end
-    end,
-    Tooltip = "See where the ball is going"
-})
-																																																																
-    if Tractories.CreateSlider then
-        Tractories:CreateSlider({
+    Trajectories = category:CreateModule({
+        Name = "Trajectories",
+        Function = function(callback)
+            if callback then
+                start()
+            else
+                stop()
+            end
+        end,
+        Tooltip = "See where the ball is going"
+    })
+
+    if Trajectories and Trajectories.CreateSlider then
+        Trajectories:CreateSlider({
             Name = "Prediction Time",
             Min = 1,
             Max = 6,
@@ -5501,7 +5512,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateSlider({
+        Trajectories:CreateSlider({
             Name = "Path Points",
             Min = 35,
             Max = 180,
@@ -5511,7 +5522,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateSlider({
+        Trajectories:CreateSlider({
             Name = "Update Rate",
             Min = 15,
             Max = 144,
@@ -5522,7 +5533,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateSlider({
+        Trajectories:CreateSlider({
             Name = "Dot Size",
             Min = 8,
             Max = 35,
@@ -5532,7 +5543,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateSlider({
+        Trajectories:CreateSlider({
             Name = "Shot Lock",
             Min = 15,
             Max = 100,
@@ -5543,7 +5554,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateSlider({
+        Trajectories:CreateSlider({
             Name = "Bounce Limit",
             Min = 0,
             Max = 5,
@@ -5554,8 +5565,8 @@ Trajectories = category:CreateModule({
         })
     end
 
-    if Tractories.CreateToggle then
-        Tractories:CreateToggle({
+    if Trajectories and Trajectories.CreateToggle then
+        Trajectories:CreateToggle({
             Name = "Live Correction",
             Default = Settings.UseLiveCorrection,
             Function = function(value)
@@ -5563,7 +5574,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateToggle({
+        Trajectories:CreateToggle({
             Name = "Spherecast",
             Default = Settings.UseSpherecast,
             Function = function(value)
@@ -5571,7 +5582,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateToggle({
+        Trajectories:CreateToggle({
             Name = "Ground Roll",
             Default = Settings.UseGroundRoll,
             Function = function(value)
@@ -5579,7 +5590,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateToggle({
+        Trajectories:CreateToggle({
             Name = "Bounces",
             Default = Settings.ShowBounces,
             Function = function(value)
@@ -5587,7 +5598,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateToggle({
+        Trajectories:CreateToggle({
             Name = "Horizon Guard",
             Default = Settings.HorizonGuard,
             Function = function(value)
@@ -5595,7 +5606,7 @@ Trajectories = category:CreateModule({
             end
         })
 
-        Tractories:CreateToggle({
+        Trajectories:CreateToggle({
             Name = "Landing Dot",
             Default = Settings.ShowLanding,
             Function = function(value)
