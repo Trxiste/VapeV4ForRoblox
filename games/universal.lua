@@ -275,7 +275,6 @@ vape.Libraries.whitelist = whitelist
 vape.Libraries.prediction = prediction
 vape.Libraries.hash = hash
 
--- Minimal required setup for entitylib
 run(function()
 	entitylib.getUpdateConnections = function(ent)
 		if not ent then return {} end
@@ -352,7 +351,6 @@ run(function()
 	end
 end)
 
--- Whitelist refresh loop
 run(function()
 	task.spawn(function()
 		repeat
@@ -370,7 +368,6 @@ run(function()
 	end
 end)
 
--- Start core systems
 run(function()
 	if entitylib and entitylib.start then
 		entitylib.start()
@@ -379,7 +376,6 @@ run(function()
 	end
 end)
 
--- Keep session info base system
 vape.Libraries.sessioninfo = {
 	Objects = {},
 	AddItem = function(self, name, startvalue, func, saved)
@@ -399,7 +395,6 @@ vape.Libraries.sessioninfo:AddItem('Time Played', os.clock(), function(value)
 	return os.date('!%X', math.floor(os.clock() - value))
 end)
 
--- Teleport cleanup hook
 local tpSwitch = false
 if vape.Clean and lplr then
 	vape:Clean(lplr.OnTeleport:Connect(function()
