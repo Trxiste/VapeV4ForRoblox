@@ -5475,19 +5475,20 @@ run(function()
     end
 
     local category = getCategory()
+if not category or not category.CreateModule then return end
 
-    Tractories = category.Render:CreateModule({
-        Name = "Tractories",
-        Function = function(callback)
-            if callback then
-                start()
-            else
-                stop()
-            end
-        end,
-        Tooltip = "Visual tractories debugger for workspace.Temp.Ball."
-    })
-
+Trajectories = category:CreateModule({
+    Name = "Trajectories",
+    Function = function(callback)
+        if callback then
+            start()
+        else
+            stop()
+        end
+    end,
+    Tooltip = "See where the ball is going"
+})
+																																																																
     if Tractories.CreateSlider then
         Tractories:CreateSlider({
             Name = "Prediction Time",
