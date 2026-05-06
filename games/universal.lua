@@ -4182,8 +4182,8 @@ run(function()
         [1329409273] = "TheAbsolute",
         [1526094417] = "Yahej",
     }
-
-    local WeirdosList = {
+--DO NOT do anything if one of these guys is in your server. One is a mod pet, One is a good pc checker and player, and the last one is just a guy with connections.
+    local WeirdosList = { 
         [7078934312] = "Magikk",
         [4665953942] = "Abyss",
         [1176773619] = "Dayton",
