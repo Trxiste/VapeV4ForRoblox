@@ -16,6 +16,9 @@ local function downloadFile(path, func)
 		if not suc or res == '404: Not Found' then
 			error(res)
 		end
+		if path:find('.lua') then
+			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
+		end
 		writefile(path, res)
 	end
 	return (func or readfile)(path)
@@ -25,7 +28,7 @@ local function wipeFolder(path)
 	if not isfolder(path) then return end
 	for _, file in listfiles(path) do
 		if file:find('loader') then continue end
-		if isfile(file) then
+		if isfile(file) and select(1, readfile(file):find('--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.')) == 1 then
 			delfile(file)
 		end
 	end
