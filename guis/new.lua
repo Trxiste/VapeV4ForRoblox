@@ -5763,11 +5763,6 @@ end))
 mainapi:CreateGUI()
 mainapi.Categories.Main:CreateDivider()
 mainapi:CreateCategory({
-	Name = 'Combat',
-	Icon = getcustomasset('newvape/assets/new/combaticon.png'),
-	Size = UDim2.fromOffset(13, 14)
-})
-mainapi:CreateCategory({
 	Name = 'Blatant',
 	Icon = getcustomasset('newvape/assets/new/blatanticon.png'),
 	Size = UDim2.fromOffset(14, 14)
@@ -5786,16 +5781,6 @@ mainapi:CreateCategory({
 	Name = 'World',
 	Icon = getcustomasset('newvape/assets/new/worldicon.png'),
 	Size = UDim2.fromOffset(14, 14)
-})
-mainapi:CreateCategory({
-	Name = 'Inventory',
-	Icon = getcustomasset('newvape/assets/new/inventoryicon.png'),
-	Size = UDim2.fromOffset(15, 14)
-})
-mainapi:CreateCategory({
-	Name = 'Minigames',
-	Icon = getcustomasset('newvape/assets/new/miniicon.png'),
-	Size = UDim2.fromOffset(19, 12)
 })
 mainapi.Categories.Main:CreateDivider('misc')
 
@@ -6079,15 +6064,12 @@ guipane:CreateButton({
 	Function = function()
 		local priority = {
 			GUICategory = 1,
-			CombatCategory = 2,
-			BlatantCategory = 3,
-			RenderCategory = 4,
-			UtilityCategory = 5,
-			WorldCategory = 6,
-			InventoryCategory = 7,
-			MinigamesCategory = 8,
-			FriendsCategory = 9,
-			ProfilesCategory = 10
+			BlatantCategory = 2,
+			RenderCategory = 3,
+			UtilityCategory = 4,
+			WorldCategory = 5,
+			FriendsCategory = 6,
+			ProfilesCategory = 7
 		}
 		local categories = {}
 		for _, v in mainapi.Categories do
