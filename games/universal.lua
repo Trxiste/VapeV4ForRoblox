@@ -1080,7 +1080,7 @@ run(function()
 				StaminaObj = nil
 			end
 		end,
-		Tooltip = 'Makes stamina drain slower also adds some delay so turn on nodelay to use'
+		Tooltip = 'Makes stamina drain slower'
 	})
 	
 	StaminaSlider = StaminaMultiplier:CreateSlider({
