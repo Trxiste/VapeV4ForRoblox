@@ -2031,7 +2031,7 @@ run(function()
 	
 	                   
 	AimAssist = vape.Categories.Blatant:CreateModule({
-		Name = 'AimAssist',
+		Name = 'AimAssist 7V7',
 		Function = function(callback)
 			if callback then
 				if showFOV then
