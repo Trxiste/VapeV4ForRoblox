@@ -1305,24 +1305,28 @@ run(function()
 	local Players = game:GetService("Players")
 	
 	local Rejoin
+	local running = false
 	
 	Rejoin = vape.Categories.Utility:CreateModule({
 		Name = 'Rejoin',
 		Function = function(callback)
-			if callback then
-				TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Players.LocalPlayer)
-				task.wait(1)
+			if not callback or running then return end
+			running = true
+			
+			task.defer(function()
 				if Rejoin.Enabled then
 					Rejoin:Toggle()
 				end
-			end
+				running = false
+			end)
+			
+			pcall(function()
+				TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Players.LocalPlayer)
+			end)
 		end,
 		Tooltip = 'Rejoins the current server'
 	})
-	
-	Rejoin:Clean(function()
-	end)
-end)
+end)																			
 
 run(function()
 	local Players = game:GetService('Players')
