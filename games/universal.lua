@@ -2144,8 +2144,12 @@ run(function()
 	local background
 	local textcolor
 	local connection
+	local addedconnection
+	local removingconnection
 	local playerconnections = {}
 	local objects = {}
+	local enabled = false
+	local currentcolor = Color3.fromHSV(0.16, 1, 1)
 
 	local function getskill(plr)
 		local data = plr:FindFirstChild('Data')
@@ -2167,7 +2171,7 @@ run(function()
 
 		local text = Drawing.new('Text')
 		text.Size = 16
-		text.Color = Color3.fromHSV(textcolor.Hue, textcolor.Sat, textcolor.Value)
+		text.Color = currentcolor
 		text.Outline = true
 		text.OutlineColor = Color3.new()
 		text.Font = 2
@@ -2198,7 +2202,7 @@ run(function()
 		local head = char and char:FindFirstChild('Head')
 		local camera = workspace.CurrentCamera
 
-		if not char or not head or not camera or (teamcheck.Enabled and lplr.Team and plr.Team and lplr.Team == plr.Team) then
+		if not enabled or not char or not head or not camera or (teamcheck.Enabled and lplr.Team and plr.Team and lplr.Team == plr.Team) then
 			obj.Text.Visible = false
 			obj.Background.Visible = false
 			return
@@ -2211,9 +2215,8 @@ run(function()
 			return
 		end
 
-		local text = getskill(plr)
-		obj.Text.Text = text
-		obj.Text.Color = Color3.fromHSV(textcolor.Hue, textcolor.Sat, textcolor.Value)
+		obj.Text.Text = getskill(plr)
+		obj.Text.Color = currentcolor
 		obj.Text.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2), pos.Y - 20)
 		obj.Text.Visible = true
 
@@ -2227,6 +2230,7 @@ run(function()
 	end
 
 	local function update()
+		if not enabled then return end
 		for _, plr in playersService:GetPlayers() do
 			if plr ~= lplr then
 				updateplayer(plr)
@@ -2253,29 +2257,46 @@ run(function()
 		end
 	end
 
+	local function disconnect()
+		if connection then
+			connection:Disconnect()
+			connection = nil
+		end
+		if addedconnection then
+			addedconnection:Disconnect()
+			addedconnection = nil
+		end
+		if removingconnection then
+			removingconnection:Disconnect()
+			removingconnection = nil
+		end
+		for plr, conn in playerconnections do
+			conn:Disconnect()
+			playerconnections[plr] = nil
+		end
+	end
+
 	skillesp = vape.Categories.Render:CreateModule({
 		Name = 'SkillESP',
 		Function = function(callback)
+			enabled = callback
 			if callback then
 				for _, plr in playersService:GetPlayers() do
 					bind(plr)
 				end
 
-				skillesp:Clean(playersService.PlayerAdded:Connect(bind))
-				skillesp:Clean(playersService.PlayerRemoving:Connect(function(plr)
+				addedconnection = playersService.PlayerAdded:Connect(bind)
+				removingconnection = playersService.PlayerRemoving:Connect(function(plr)
 					if playerconnections[plr] then
 						playerconnections[plr]:Disconnect()
 						playerconnections[plr] = nil
 					end
 					remove(plr)
-				end))
-
+				end)
 				connection = runService.RenderStepped:Connect(update)
+				update()
 			else
-				if connection then
-					connection:Disconnect()
-					connection = nil
-				end
+				disconnect()
 				clear()
 			end
 		end,
@@ -2293,7 +2314,8 @@ run(function()
 		DefaultHue = 0.16,
 		DefaultSat = 1,
 		DefaultValue = 1,
-		Function = function()
+		Function = function(hue, sat, val)
+			currentcolor = Color3.fromHSV(hue, sat, val)
 			update()
 		end,
 		Tooltip = 'Color of the skill text'
@@ -2306,16 +2328,8 @@ run(function()
 	})
 
 	skillesp:Clean(function()
-		if connection then
-			connection:Disconnect()
-			connection = nil
-		end
-
-		for plr, conn in playerconnections do
-			conn:Disconnect()
-			playerconnections[plr] = nil
-		end
-
+		enabled = false
+		disconnect()
 		clear()
 	end)
 end)
@@ -4075,7 +4089,6 @@ run(function()
         [1329409273] = "TheAbsolute",
         [1526094417] = "Yahej",
     }
---DO NOT do anything if one of these guys is in your server. One is a mod pet, One is a good pc checker and player, and the last one is just a guy with connections.
     local WeirdosList = { 
         [7078934312] = "Magikk",
         [4665953942] = "Abyss",
