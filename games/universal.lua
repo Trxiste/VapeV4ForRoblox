@@ -1768,7 +1768,7 @@ run(function()
 	end
 	
 	local Noclip = vape.Categories.Blatant:CreateModule({
-		Name = 'Noclip',
+		Name = 'SuperBodyBlock',
 		Function = function(callback)
 			Enabled = callback
 			if callback then
@@ -1793,7 +1793,7 @@ run(function()
 		Name = 'Range',
 		Min = 3,
 		Max = 15,
-		Default = 6,
+		Default = 3,
 		Decimal = 1,
 		Function = function(val)
 			ProximityRange = val
