@@ -1324,7 +1324,6 @@ run(function()
 	end)
 end)
 
-
 run(function()
 	local Players = game:GetService('Players')
 	local RunService = game:GetService('RunService')
@@ -1676,7 +1675,6 @@ run(function()
 	end)
 end)
 
-
 run(function()
 	local Players = game:GetService("Players")
 	local RunService = game:GetService("RunService")
@@ -1943,8 +1941,7 @@ run(function()
 		local up = right:Cross(smoothLook).Unit
 		gameCamera.CFrame = CFrame.fromMatrix(camPos, right, up, -smoothLook)
 	end
-	
-	                       
+		                       
 	local function createFOVCircle()
 		if FOVCircle then return end
 		if not showFOV then return end
@@ -2638,9 +2635,7 @@ run(function()
 		end
 		return false
 	end
-
-	                                                         
-	                                   
+                                 
 	local function setupRequireHook()
 		if hooked then return end
 
@@ -2734,12 +2729,7 @@ run(function()
 			return string.format('%.2fx', val / 10)
 		end
 	})
-end)
-
-                          
-                                                                    
-                                                  
-                                               
+end)                                       
 
 run(function()
     local HighJump
@@ -3352,10 +3342,7 @@ run(function()
 		wHeldDuration = 0
 		speedActive = false
 	end)
-end)
-
-                           
-                                                                           
+end)                                                                     
 
 run(function()
     local Tracksuit
@@ -5153,11 +5140,8 @@ run(function()
 
         local newVel = tangentVel * tangentDamping - normalVel * bounce
 
-        if isFirstBounce then
-                                         
-                                                                                
-                                                                
-                                                                                  
+        if isFirstBounce then                                                    
+                                                                              
             if math.abs(vel.Y) < 35 then
                 newVel = Vector3.new(
                     newVel.X,
@@ -6164,291 +6148,11 @@ end)
 		Tooltip = "Shows the defender reference line"
 	})
 
-
-
 	Offsides:Clean(function()
 		clearEverything()
 	end)
 end)
  
-
- run(function()
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-
-    local lplr = Players.LocalPlayer
-    local camera = workspace.CurrentCamera
-
-    local Enabled = false
-    local ShowNames = true
-    local ShowDistance = true
-    local ShowLocalPlayer = false
-
-    local MarkerColor = Color3.fromRGB(35, 140, 125)
-    local MarkerTransparency = 0.45
-    local MaxDistance = 1000
-    local Mode = "Box"
-
-    local Folder
-    local Connection
-    local Markers = {}
-
-    local function getTextFromDropdown(selected, fallback)
-        if typeof(selected) == "table" then
-            return selected.Value or selected.Name or selected[1] or fallback
-        end
-
-        return tostring(selected or fallback)
-    end
-
-    local function destroyMarker(player)
-        local marker = Markers[player]
-
-        if marker then
-            if marker.Part then
-                marker.Part:Destroy()
-            end
-
-            Markers[player] = nil
-        end
-    end
-
-    local function createMarker(player)
-        if Markers[player] then
-            return Markers[player]
-        end
-
-        local part = Instance.new("Part")
-        part.Name = player.Name .. "_PositionMarker"
-        part.Anchored = true
-        part.CanCollide = false
-        part.CanTouch = false
-        part.CanQuery = false
-        part.CastShadow = false
-        part.Material = Enum.Material.Neon
-        part.Color = MarkerColor
-        part.Transparency = MarkerTransparency
-        part.Size = Vector3.new(2, 5, 1)
-        part.Parent = Folder
-
-        local billboard = Instance.new("BillboardGui")
-        billboard.Name = "PositionLabel"
-        billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 200, 0, 40)
-        billboard.StudsOffset = Vector3.new(0, 3.5, 0)
-        billboard.Parent = part
-
-        local label = Instance.new("TextLabel")
-        label.Name = "Text"
-        label.BackgroundTransparency = 1
-        label.Size = UDim2.fromScale(1, 1)
-        label.Font = Enum.Font.GothamBold
-        label.TextSize = 13
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextStrokeTransparency = 0.35
-        label.Text = player.Name
-        label.Parent = billboard
-
-        Markers[player] = {
-            Part = part,
-            Billboard = billboard,
-            Label = label
-        }
-
-        return Markers[player]
-    end
-
-    local function updateMarker(player)
-        if player == lplr and not ShowLocalPlayer then
-            destroyMarker(player)
-            return
-        end
-
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-
-        if not char or not hrp or not hum or hum.Health <= 0 then
-            destroyMarker(player)
-            return
-        end
-
-        local cam = workspace.CurrentCamera
-        if not cam then
-            return
-        end
-
-        local distance = (hrp.Position - cam.CFrame.Position).Magnitude
-
-        if distance > MaxDistance then
-            destroyMarker(player)
-            return
-        end
-
-        local marker = createMarker(player)
-        local part = marker.Part
-
-        local cf
-        local size
-
-        if Mode == "Dot" then
-            cf = CFrame.new(hrp.Position)
-            size = Vector3.new(0.45, 0.45, 0.45)
-
-        elseif Mode == "HumanoidRootPart" then
-            cf = hrp.CFrame
-            size = hrp.Size + Vector3.new(0.12, 0.12, 0.12)
-
-        else
-            local ok, boxCF, boxSize = pcall(function()
-                return char:GetBoundingBox()
-            end)
-
-            if ok and boxCF and boxSize then
-                cf = boxCF
-                size = boxSize + Vector3.new(0.12, 0.12, 0.12)
-            else
-                cf = hrp.CFrame
-                size = Vector3.new(2, 5, 1)
-            end
-        end
-
-        part.CFrame = cf
-        part.Size = size
-        part.Color = MarkerColor
-        part.Transparency = MarkerTransparency
-
-        local text = ""
-
-        if ShowNames then
-            text = player.Name
-        end
-
-        if ShowDistance then
-            if text ~= "" then
-                text = text .. " | "
-            end
-
-            text = text .. tostring(math.floor(distance)) .. " studs"
-        end
-
-        marker.Billboard.Enabled = text ~= ""
-        marker.Label.Text = text
-    end
-
-    local Positions = vape.Categories.Render:CreateModule({
-        Name = "Positions",
-        Tooltip = "Shows players server positions",
-        Function = function(callback)
-            Enabled = callback
-
-            if callback then
-                Folder = Instance.new("Folder")
-                Folder.Name = "PositionsVisualOnly"
-                Folder.Parent = camera or workspace
-
-                Connection = RunService.RenderStepped:Connect(function()
-                    for _, player in ipairs(Players:GetPlayers()) do
-                        updateMarker(player)
-                    end
-                end)
-            else
-                if Connection then
-                    Connection:Disconnect()
-                    Connection = nil
-                end
-
-                for player in pairs(Markers) do
-                    destroyMarker(player)
-                end
-
-                if Folder then
-                    Folder:Destroy()
-                    Folder = nil
-                end
-            end
-        end
-    })
-
-    Positions:CreateToggle({
-        Name = "Show names",
-        Default = true,
-        Function = function(callback)
-            ShowNames = callback
-        end
-    })
-
-    Positions:CreateToggle({
-        Name = "Show distance",
-        Default = true,
-        Function = function(callback)
-            ShowDistance = callback
-        end
-    })
-
-    Positions:CreateToggle({
-        Name = "Show local player",
-        Default = false,
-        Function = function(callback)
-            ShowLocalPlayer = callback
-        end
-    })
-
-    Positions:CreateSlider({
-        Name = "Max distance",
-        Min = 50,
-        Max = 5000,
-        Default = 1000,
-        Function = function(value)
-            MaxDistance = tonumber(value) or 1000
-        end
-    })
-
-    Positions:CreateSlider({
-        Name = "Transparency",
-        Min = 0,
-        Max = 100,
-        Default = 45,
-        Function = function(value)
-            MarkerTransparency = math.clamp((tonumber(value) or 45) / 100, 0, 1)
-        end
-    })
-
-    Positions:CreateColorSlider({
-        Name = "Color",
-        Default = MarkerColor,
-        Function = function(hue, sat, val)
-            if typeof(hue) == "Color3" then
-                MarkerColor = hue
-            else
-                MarkerColor = Color3.fromHSV(hue, sat, val)
-            end
-
-            for _, marker in pairs(Markers) do
-                if marker.Part then
-                    marker.Part.Color = MarkerColor
-                end
-            end
-        end
-    })
-
-    Positions:CreateDropdown({
-        Name = "Mode",
-        List = {
-            "Box",
-            "HumanoidRootPart",
-            "Dot"
-        },
-        Default = "Box",
-        Function = function(selected)
-            Mode = getTextFromDropdown(selected, Mode)
-        end
-    })
-
-    Players.PlayerRemoving:Connect(function(player)
-        destroyMarker(player)
-    end)
-end)
 
 if vape and vape.CreateNotification then
     vape:CreateNotification(
