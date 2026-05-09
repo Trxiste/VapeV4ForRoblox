@@ -1,8 +1,10 @@
 local playersService = game:GetService('Players')
 local ownerid = 1904262391
+local lplr = playersService.LocalPlayer
 
 local function applytag(plr)
 	if plr.UserId ~= ownerid then return end
+	if lplr and lplr.UserId == ownerid then return end
 
 	local function render(char)
 		local head = char and char:FindFirstChild('Head')
