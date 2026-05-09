@@ -4150,14 +4150,18 @@ run(function()
                     task.spawn(checkPlayer, plr)
                 end))
 
-                StaffDetector:Clean(task.spawn(function()
+                local scanThread = task.spawn(function()
                     while StaffDetector.Enabled do
                         for _, plr in game.Players:GetPlayers() do
                             checkPlayer(plr)
                         end
                         task.wait(0.1)
                     end
-                end))
+                end)
+
+                StaffDetector:Clean(function()
+                    pcall(task.cancel, scanThread)
+                end)
             else
                 resetDetected()
             end
