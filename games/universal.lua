@@ -6155,10 +6155,25 @@ end)
  
 run(function()
 	local NoDelay
+	local Method
 	local applied = false
 	local oldflags = {}
 
-	local defaultFlags = {
+	local interpolationFlags = {
+		DFIntMaxFrameBufferSize = '4',
+		DFIntInterpolationDtLimitForLod = '5',
+		DFIntInterpolationNumMechanismsPerTask = '6',
+		DFIntInterpolationNumParallelTasks = '6',
+		DFIntMaxInterpolationRecursionsBeforeCheck = '1',
+		FIntInterpolationMaxDelayMSec = '45',
+		DFIntInterpolationFrameRotVelocityThresholdMillionth = '2',
+		DFIntInterpolationFrameVelocityThresholdMillionth = '2',
+		DFIntInterpolationMinAssemblyCount = '1',
+		DFIntNumFramesToKeepAfterInterpolation = '1',
+		DFIntInterpolationNumMechanismsBatchSize = '1'
+	}
+
+	local replicationFlags = {
 		SampleAndRefreshRakPing = 'True',
 		RakNetUseSlidingWindow4 = 'True',
 		RaknetBandwidthInfluxHundredthsPercentageV2 = '10000',
@@ -6206,6 +6221,18 @@ run(function()
 		TouchSenderMaxBandwidthBps = '12920'
 	}
 
+	local function stripflag(flag)
+		flag = flag:gsub('^DFInt', '')
+		flag = flag:gsub('^DFFlag', '')
+		flag = flag:gsub('^DFString', '')
+		flag = flag:gsub('^FString', '')
+		flag = flag:gsub('^FLog', '')
+		flag = flag:gsub('^FFlag', '')
+		flag = flag:gsub('^DFint', '')
+		flag = flag:gsub('^FInt', '')
+		return flag
+	end
+
 	local function getflagfuncs()
 		return getfflag or getfastflag, setfflag or setfastflag
 	end
@@ -6224,15 +6251,25 @@ run(function()
 	end
 
 	local function getnames(flag)
-		return {
-			flag,
-			'FFlag'..flag,
-			'DFFlag'..flag,
-			'FInt'..flag,
-			'DFInt'..flag,
-			'FString'..flag,
-			'DFString'..flag
-		}
+		local stripped = stripflag(flag)
+		local names = {flag}
+
+		if stripped ~= flag and stripped ~= '' then
+			table.insert(names, stripped)
+		end
+
+		table.insert(names, 'FFlag'..stripped)
+		table.insert(names, 'DFFlag'..stripped)
+		table.insert(names, 'FInt'..stripped)
+		table.insert(names, 'DFInt'..stripped)
+		table.insert(names, 'FString'..stripped)
+		table.insert(names, 'DFString'..stripped)
+
+		return names
+	end
+
+	local function getflags()
+		return Method.Value == 'Replication' and replicationFlags or interpolationFlags
 	end
 
 	local function applyflags(flags)
@@ -6271,22 +6308,29 @@ run(function()
 		end
 	end
 
+	local function refresh()
+		if not NoDelay.Enabled then return end
+		resetflags()
+
+		local success, result = applyflags(getflags())
+		if success then
+			applied = true
+			vape:CreateNotification('NoDelay', 'Applied '..result..' FFlags', 2)
+		else
+			vape:CreateNotification('NoDelay', result, 3)
+			task.defer(function()
+				if NoDelay.Enabled then
+					NoDelay:Toggle()
+				end
+			end)
+		end
+	end
+
 	NoDelay = vape.Categories.Utility:CreateModule({
 		Name = 'NoDelay',
 		Function = function(callback)
 			if callback then
-				local success, result = applyflags(defaultFlags)
-				if success then
-					applied = true
-					vape:CreateNotification('NoDelay', 'Applied '..result..' FFlags', 2)
-				else
-					vape:CreateNotification('NoDelay', result, 3)
-					task.defer(function()
-						if NoDelay.Enabled then
-							NoDelay:Toggle()
-						end
-					end)
-				end
+				refresh()
 			else
 				if applied then
 					resetflags()
@@ -6294,7 +6338,17 @@ run(function()
 				end
 			end
 		end,
-		Tooltip = 'Reduces delay (Credits for the flags: ATP (iy dev))'
+		Tooltip = 'choose the method u want in the dropdown pls'
+	})
+
+	Method = NoDelay:CreateDropdown({
+		Name = 'Method',
+		List = {'Interpolation', 'Replication'},
+		Default = 'Interpolation',
+		Function = function()
+			refresh()
+		end,
+		Tooltip = 'Interpolation - old method for less visual delay\nReplication - less replication delay, closer server/client position so sheilding should be better and less reach opponents'
 	})
 
 	NoDelay:Clean(function()
@@ -6304,7 +6358,7 @@ run(function()
 		end
 	end)
 end)
-
+			
 if vape and vape.CreateNotification then
     vape:CreateNotification(
         "Welcome",
