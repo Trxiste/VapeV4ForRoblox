@@ -6153,6 +6153,157 @@ end)
 	end)
 end)
  
+run(function()
+	local NoDelay
+	local applied = false
+	local oldflags = {}
+
+	local defaultFlags = {
+		SampleAndRefreshRakPing = 'True',
+		RakNetUseSlidingWindow4 = 'True',
+		RaknetBandwidthInfluxHundredthsPercentageV2 = '10000',
+		RakNetClockDriftAdjustmentPerPingMillisecond = '100',
+		MaxReceiveToDeserializeLatencyMilliseconds = '15',
+		MegaReplicatorNetworkQualityProcessorUnit = '10',
+		NetworkInDeserializeLimitGameplayMsClient = '6',
+		ClientPacketHealthyAllocationPercent = '20',
+		MaxWaitTimeBeforeForcePacketProcessMS = '1',
+		NetworkInProcessLimitGameplayMsClient = '6',
+		RaknetBandwidthPingSendEveryXSeconds = '1',
+		ClientPacketMaxFrameMicroseconds = '200',
+		MaxProcessPacketsStepsPerCyclic = '5000',
+		ClientPacketExcessMicroseconds = '1000',
+		MaxProcessPacketsStepsAccumulated = '0',
+		WaitOnUpdateNetworkLoopEndedMS = '100',
+		LargePacketQueueSizeCutoffMB = '1000',
+		MaxProcessPacketsJobScaling = '10000',
+		RakNetNakResendDelayRttPercent = '50',
+		ClientPacketMinMicroseconds = '1',
+		WaitOnRecvFromLoopEndedMS = '100',
+		RakNetNakResendDelayMsMax = '100',
+		RakNetMinAckGrowthPercent = '0',
+		CodecMaxIncomingPackets = '100',
+		RakNetMtuValue3InBytes = '1200',
+		RakNetMtuValue1InBytes = '1280',
+		RakNetMtuValue2InBytes = '1240',
+		RakNetNakResendDelayMs = '10',
+		RakNetResendRttMultiple = '1',
+		ClientPacketMaxDelayMs = '11',
+		RakNetSelectTimeoutMs = '1',
+		ConnectionMTUSize = '1500',
+		RakNetLoopMs = '1',
+		RakNetResendBufferArrayLength = '128',
+		SpecifyNetworkReplicatorScopeForItems = 'True',
+		SpecifyNetworkReplicatorScope = 'True',
+		Network = '7',
+		NetPhysicsSendRate = '251',
+		EnablePhysicsDirectSend = 'True',
+		NetParallelProcessing = 'True',
+		NetUseTaskSchedulerSend = 'True',
+		DataSenderRate = '252',
+		S2PhysicsSenderRate = '252',
+		SimDefaultFluidForceEnabled = '3',
+		TouchSenderMaxBandwidthBps = '12920'
+	}
+
+	local function getflagfuncs()
+		return getfflag or getfastflag, setfflag or setfastflag
+	end
+
+	local function readflag(func, flag)
+		local suc, res = pcall(function()
+			return func(flag)
+		end)
+		return suc and res ~= nil, res
+	end
+
+	local function writeflag(func, flag, value)
+		return pcall(function()
+			func(flag, tostring(value))
+		end)
+	end
+
+	local function getnames(flag)
+		return {
+			flag,
+			'FFlag'..flag,
+			'DFFlag'..flag,
+			'FInt'..flag,
+			'DFInt'..flag,
+			'FString'..flag,
+			'DFString'..flag
+		}
+	end
+
+	local function applyflags(flags)
+		local getflag, setflag = getflagfuncs()
+		if not setflag then
+			return false, 'setfflag not supported'
+		end
+		if not getflag then
+			return false, 'getfflag not supported'
+		end
+
+		local count = 0
+		for flag, value in pairs(flags) do
+			for _, name in getnames(flag) do
+				local exists, oldvalue = readflag(getflag, name)
+				if exists then
+					oldflags[name] = oldflags[name] or oldvalue
+					if writeflag(setflag, name, value) then
+						count += 1
+						break
+					end
+				end
+			end
+		end
+
+		return true, count
+	end
+
+	local function resetflags()
+		local _, setflag = getflagfuncs()
+		if not setflag then return end
+
+		for flag, value in pairs(oldflags) do
+			writeflag(setflag, flag, value)
+			oldflags[flag] = nil
+		end
+	end
+
+	NoDelay = vape.Categories.Utility:CreateModule({
+		Name = 'NoDelay',
+		Function = function(callback)
+			if callback then
+				local success, result = applyflags(defaultFlags)
+				if success then
+					applied = true
+					vape:CreateNotification('NoDelay', 'Applied '..result..' FFlags', 2)
+				else
+					vape:CreateNotification('NoDelay', result, 3)
+					task.defer(function()
+						if NoDelay.Enabled then
+							NoDelay:Toggle()
+						end
+					end)
+				end
+			else
+				if applied then
+					resetflags()
+					applied = false
+				end
+			end
+		end,
+		Tooltip = 'Reduces delay (Credits for the flags: ATP (iy dev))'
+	})
+
+	NoDelay:Clean(function()
+		if applied then
+			resetflags()
+			applied = false
+		end
+	end)
+end)
 
 if vape and vape.CreateNotification then
     vape:CreateNotification(
