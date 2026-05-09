@@ -2135,295 +2135,188 @@ run(function()
 end)
 
 run(function()
-	local Players = game:GetService("Players")
-	local RunService = game:GetService("RunService")
-	local LocalPlayer = Players.LocalPlayer
-	
-	                  
-	local Enabled = false
-	local Connection = nil
-	local DrawingObjects = {}
-	
-	                       
-	local TeamCheck
-	local TextColorDropdown
-	local ShowBackground
-	local RainbowMode
-	
-	                
-	local ColorPresets = {
-		Yellow = Color3.fromRGB(255, 255, 0),
-		Green = Color3.fromRGB(0, 255, 0),
-		Red = Color3.fromRGB(255, 0, 0),
-		Blue = Color3.fromRGB(0, 200, 255),
-		White = Color3.fromRGB(255, 255, 255),
-		Cyan = Color3.fromRGB(0, 255, 255),
-		Magenta = Color3.fromRGB(255, 0, 255)
-	}
-	
-	                
-	local RainbowHue = 0
-	local RainbowSpeed = 2
-	
-	                               
-	local function GetPlayerSkill(player)
-		if not player then return "Unknown" end
-		
-		local success, result = pcall(function()
-			local data = player:FindFirstChild("Data")
-			if data then
-				local selectedSkill = data:FindFirstChild("SelectedSkill")
-				if selectedSkill then
-					return tostring(selectedSkill.Value)
-				end
-			end
-			return "None"
-		end)
-		
-		if success then
-			return result ~= "" and result or "None"
-		else
-			return "Loading..."
+	local playersService = cloneref(game:GetService('Players'))
+	local runService = cloneref(game:GetService('RunService'))
+
+	local lplr = playersService.LocalPlayer
+	local skillesp
+	local teamcheck
+	local background
+	local textcolor
+	local connection
+	local playerconnections = {}
+	local objects = {}
+
+	local function getskill(plr)
+		local data = plr:FindFirstChild('Data')
+		data = data and data:FindFirstChild('SelectedSkill')
+		return data and tostring(data.Value) ~= '' and tostring(data.Value) or 'None'
+	end
+
+	local function remove(plr)
+		local obj = objects[plr]
+		if obj then
+			if obj.Text then obj.Text:Remove() end
+			if obj.Background then obj.Background:Remove() end
+			objects[plr] = nil
 		end
 	end
-	
-	                                                      
-	local function IsSameTeam(player)
-		if not TeamCheck or not TeamCheck.Value then return false end
-		if LocalPlayer.Team == nil or player.Team == nil then return false end
-		return player.Team == LocalPlayer.Team
-	end
-	
-	                                      
-	local function CreateSkillText(player)
-		if not Drawing or not player.Character then return nil end
-		
-		local skillText = Drawing.new("Text")
-		skillText.Size = 16
-		skillText.Color = ColorPresets.Yellow
-		skillText.Outline = true
-		skillText.OutlineColor = Color3.fromRGB(0, 0, 0)
-		skillText.Font = 2
-		skillText.Center = false
-		skillText.Visible = false
-		skillText.Text = ""
-		
-		local background = nil
-		background = Drawing.new("Square")
-		background.Color = Color3.fromRGB(0, 0, 0)
-		background.Filled = true
-		background.Visible = false
-		background.Transparency = 0.5
-		
-		return {
-			text = skillText,
-			background = background,
-			player = player,
-			lastSkill = ""
+
+	local function create(plr)
+		if not Drawing then return end
+
+		local text = Drawing.new('Text')
+		text.Size = 16
+		text.Color = Color3.fromHSV(textcolor.Hue, textcolor.Sat, textcolor.Value)
+		text.Outline = true
+		text.OutlineColor = Color3.new()
+		text.Font = 2
+		text.Center = false
+		text.Visible = false
+
+		local box = Drawing.new('Square')
+		box.Color = Color3.new()
+		box.Filled = true
+		box.Transparency = 0.5
+		box.Visible = false
+
+		objects[plr] = {
+			Text = text,
+			Background = box
 		}
+
+		return objects[plr]
 	end
-	
-	                                               
-	local function UpdateTextPosition(obj)
-		if not obj or not obj.player then return end
-		
-		local player = obj.player
-		local character = player.Character
-		
-		if not character then
-			obj.text.Visible = false
-			if obj.background then obj.background.Visible = false end
-			return
-		end
-		
-		local head = character:FindFirstChild("Head")
-		
-		if not head then
-			obj.text.Visible = false
-			if obj.background then obj.background.Visible = false end
-			return
-		end
-		
-		                                         
-		if IsSameTeam(player) then
-			obj.text.Visible = false
-			if obj.background then obj.background.Visible = false end
-			return
-		end
-		
+
+	local function updateplayer(plr)
+		if plr == lplr then return end
+
+		local obj = objects[plr] or create(plr)
+		if not obj then return end
+
+		local char = plr.Character
+		local head = char and char:FindFirstChild('Head')
 		local camera = workspace.CurrentCamera
-		if not camera then return end
-		
-		                                                    
-		local headWorldPos = head.Position + Vector3.new(0, 1.2, 0)
-		local headScreenPos = camera:WorldToScreenPoint(headWorldPos)
-		
-		                                                    
-		if headScreenPos.Z > 0 then
-			local text = obj.text
-			local skill = GetPlayerSkill(player)
-			
-			                          
-			obj.lastSkill = skill
-			text.Text = skill
-			text.Visible = true
-			
-			                                    
-			if RainbowMode and RainbowMode.Value then
-				text.Color = Color3.fromHSV(RainbowHue % 1, 1, 1)
-			elseif TextColorDropdown then
-				text.Color = ColorPresets[TextColorDropdown.Value] or ColorPresets.Yellow
-			end
-			
-			                                                          
-			text.Position = Vector2.new(headScreenPos.X - (text.TextBounds.X / 2), headScreenPos.Y - 20)
-			
-			                    
-			if ShowBackground and ShowBackground.Value then
-				local textWidth = text.TextBounds.X
-				local textHeight = text.TextBounds.Y
-				obj.background.Size = Vector2.new(textWidth + 8, textHeight + 4)
-				obj.background.Position = Vector2.new(headScreenPos.X - textWidth / 2 - 4, headScreenPos.Y - 22)
-				obj.background.Visible = true
-			elseif obj.background then
-				obj.background.Visible = false
-			end
+
+		if not char or not head or not camera or (teamcheck.Enabled and lplr.Team and plr.Team and lplr.Team == plr.Team) then
+			obj.Text.Visible = false
+			obj.Background.Visible = false
+			return
+		end
+
+		local pos, visible = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.2, 0))
+		if not visible or pos.Z <= 0 then
+			obj.Text.Visible = false
+			obj.Background.Visible = false
+			return
+		end
+
+		local text = getskill(plr)
+		obj.Text.Text = text
+		obj.Text.Color = Color3.fromHSV(textcolor.Hue, textcolor.Sat, textcolor.Value)
+		obj.Text.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2), pos.Y - 20)
+		obj.Text.Visible = true
+
+		if background.Enabled then
+			obj.Background.Size = Vector2.new(obj.Text.TextBounds.X + 8, obj.Text.TextBounds.Y + 4)
+			obj.Background.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2) - 4, pos.Y - 22)
+			obj.Background.Visible = true
 		else
-			obj.text.Visible = false
-			if obj.background then
-				obj.background.Visible = false
+			obj.Background.Visible = false
+		end
+	end
+
+	local function update()
+		for _, plr in playersService:GetPlayers() do
+			if plr ~= lplr then
+				updateplayer(plr)
+			end
+		end
+
+		for plr in objects do
+			if not plr.Parent then
+				remove(plr)
 			end
 		end
 	end
-	
-	                                        
-	local function RemovePlayerText(playerName)
-		if DrawingObjects[playerName] then
-			local obj = DrawingObjects[playerName]
-			if obj.text then obj.text:Remove() end
-			if obj.background then obj.background:Remove() end
-			DrawingObjects[playerName] = nil
-		end
-	end
-	
-	                               
-	local function ClearAllTexts()
-		for playerName, obj in pairs(DrawingObjects) do
-			if obj.text then obj.text:Remove() end
-			if obj.background then obj.background:Remove() end
-		end
-		DrawingObjects = {}
-	end
-	
-	                                                    
-	local function OnRenderStep()
-		                     
-		if RainbowMode and RainbowMode.Value then
-			RainbowHue = (RainbowHue + RainbowSpeed * 0.016) % 1
-		end
-		
-		                                                                   
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player ~= LocalPlayer then
-				if not DrawingObjects[player.Name] then
-					DrawingObjects[player.Name] = CreateSkillText(player)
-				end
-				
-				if DrawingObjects[player.Name] then
-					UpdateTextPosition(DrawingObjects[player.Name])
-				end
-			end
-		end
-		
-		                                    
-		for playerName, obj in pairs(DrawingObjects) do
-			if not Players:FindFirstChild(playerName) then
-				RemovePlayerText(playerName)
-			end
-		end
-	end
-	
-	                                                 
-	local function OnCharacterAdded(player)
-		if player == LocalPlayer then return end
-		RemovePlayerText(player.Name)
-	end
-	
-	                      
-	local function OnPlayerAdded(player)
-		if player == LocalPlayer then return end
-		
-		player.CharacterAdded:Connect(function()
-			OnCharacterAdded(player)
+
+	local function bind(plr)
+		if plr == lplr or playerconnections[plr] then return end
+		playerconnections[plr] = plr.CharacterAdded:Connect(function()
+			remove(plr)
 		end)
 	end
-	
-	                 
-	Players.PlayerAdded:Connect(OnPlayerAdded)
-	
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer then
-			OnPlayerAdded(player)
+
+	local function clear()
+		for plr in objects do
+			remove(plr)
 		end
 	end
-	
-	                 
-	local SkillESP = vape.Categories.Render:CreateModule({
+
+	skillesp = vape.Categories.Render:CreateModule({
 		Name = 'SkillESP',
 		Function = function(callback)
-			Enabled = callback
 			if callback then
-				                                   
-				Connection = RunService.RenderStepped:Connect(OnRenderStep)
-			else
-				                                        
-				if Connection then
-					Connection:Disconnect()
-					Connection = nil
+				for _, plr in playersService:GetPlayers() do
+					bind(plr)
 				end
-				ClearAllTexts()
+
+				skillesp:Clean(playersService.PlayerAdded:Connect(bind))
+				skillesp:Clean(playersService.PlayerRemoving:Connect(function(plr)
+					if playerconnections[plr] then
+						playerconnections[plr]:Disconnect()
+						playerconnections[plr] = nil
+					end
+					remove(plr)
+				end))
+
+				connection = runService.RenderStepped:Connect(update)
+			else
+				if connection then
+					connection:Disconnect()
+					connection = nil
+				end
+				clear()
 			end
 		end,
 		Tooltip = 'Display player skills above their heads'
 	})
-	
-	                    
-	TeamCheck = SkillESP:CreateToggle({
+
+	teamcheck = skillesp:CreateToggle({
 		Name = 'Team Check',
 		Default = false,
 		Tooltip = 'Only show enemy skills'
 	})
-	
-	                      
-	TextColorDropdown = SkillESP:CreateDropdown({
+
+	textcolor = skillesp:CreateColorSlider({
 		Name = 'Text Color',
-		List = {"Yellow", "Green", "Red", "Blue", "White", "Cyan", "Magenta"},
-		Default = "Yellow",
+		DefaultHue = 0.16,
+		DefaultSat = 1,
+		DefaultValue = 1,
+		Function = function()
+			update()
+		end,
 		Tooltip = 'Color of the skill text'
 	})
-	
-	                         
-	ShowBackground = SkillESP:CreateToggle({
+
+	background = skillesp:CreateToggle({
 		Name = 'Show Background',
 		Default = true,
 		Tooltip = 'Show background behind skill text'
 	})
-	
-	                      
-	RainbowMode = SkillESP:CreateToggle({
-		Name = 'Rainbow Mode',
-		Default = false,
-		Tooltip = 'Cycle through rainbow colors'
-	})
-	
-	          
-	SkillESP:Clean(function()
-		Enabled = false
-		if Connection then
-			Connection:Disconnect()
-			Connection = nil
+
+	skillesp:Clean(function()
+		if connection then
+			connection:Disconnect()
+			connection = nil
 		end
-		ClearAllTexts()
+
+		for plr, conn in playerconnections do
+			conn:Disconnect()
+			playerconnections[plr] = nil
+		end
+
+		clear()
 	end)
 end)
 
