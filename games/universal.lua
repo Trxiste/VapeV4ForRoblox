@@ -2142,14 +2142,13 @@ run(function()
 	local skillesp
 	local teamcheck
 	local background
-	local textcolor
+	local coloroption
 	local connection
 	local addedconnection
 	local removingconnection
+	local textcolor = Color3.fromHSV(0.16, 1, 1)
 	local playerconnections = {}
 	local objects = {}
-	local enabled = false
-	local currentcolor = Color3.fromHSV(0.16, 1, 1)
 
 	local function getskill(plr)
 		local data = plr:FindFirstChild('Data')
@@ -2160,8 +2159,12 @@ run(function()
 	local function remove(plr)
 		local obj = objects[plr]
 		if obj then
-			if obj.Text then obj.Text:Remove() end
-			if obj.Background then obj.Background:Remove() end
+			if obj.Text then
+				obj.Text:Remove()
+			end
+			if obj.Background then
+				obj.Background:Remove()
+			end
 			objects[plr] = nil
 		end
 	end
@@ -2171,7 +2174,7 @@ run(function()
 
 		local text = Drawing.new('Text')
 		text.Size = 16
-		text.Color = currentcolor
+		text.Color = textcolor
 		text.Outline = true
 		text.OutlineColor = Color3.new()
 		text.Font = 2
@@ -2202,7 +2205,7 @@ run(function()
 		local head = char and char:FindFirstChild('Head')
 		local camera = workspace.CurrentCamera
 
-		if not enabled or not char or not head or not camera or (teamcheck.Enabled and lplr.Team and plr.Team and lplr.Team == plr.Team) then
+		if not char or not head or not camera or (teamcheck.Enabled and lplr.Team and plr.Team and lplr.Team == plr.Team) then
 			obj.Text.Visible = false
 			obj.Background.Visible = false
 			return
@@ -2216,7 +2219,7 @@ run(function()
 		end
 
 		obj.Text.Text = getskill(plr)
-		obj.Text.Color = currentcolor
+		obj.Text.Color = textcolor
 		obj.Text.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2), pos.Y - 20)
 		obj.Text.Visible = true
 
@@ -2230,7 +2233,6 @@ run(function()
 	end
 
 	local function update()
-		if not enabled then return end
 		for _, plr in playersService:GetPlayers() do
 			if plr ~= lplr then
 				updateplayer(plr)
@@ -2251,13 +2253,22 @@ run(function()
 		end)
 	end
 
+	local function unbind(plr)
+		local conn = playerconnections[plr]
+		if conn then
+			conn:Disconnect()
+			playerconnections[plr] = nil
+		end
+		remove(plr)
+	end
+
 	local function clear()
 		for plr in objects do
 			remove(plr)
 		end
 	end
 
-	local function disconnect()
+	local function stop()
 		if connection then
 			connection:Disconnect()
 			connection = nil
@@ -2274,30 +2285,23 @@ run(function()
 			conn:Disconnect()
 			playerconnections[plr] = nil
 		end
+		clear()
 	end
 
 	skillesp = vape.Categories.Render:CreateModule({
 		Name = 'SkillESP',
 		Function = function(callback)
-			enabled = callback
 			if callback then
 				for _, plr in playersService:GetPlayers() do
 					bind(plr)
 				end
 
 				addedconnection = playersService.PlayerAdded:Connect(bind)
-				removingconnection = playersService.PlayerRemoving:Connect(function(plr)
-					if playerconnections[plr] then
-						playerconnections[plr]:Disconnect()
-						playerconnections[plr] = nil
-					end
-					remove(plr)
-				end)
+				removingconnection = playersService.PlayerRemoving:Connect(unbind)
 				connection = runService.RenderStepped:Connect(update)
 				update()
 			else
-				disconnect()
-				clear()
+				stop()
 			end
 		end,
 		Tooltip = 'Display player skills above their heads'
@@ -2309,13 +2313,13 @@ run(function()
 		Tooltip = 'Only show enemy skills'
 	})
 
-	textcolor = skillesp:CreateColorSlider({
-		Name = 'Text Color',
+	coloroption = skillesp:CreateColorSlider({
+		Name = 'Color',
 		DefaultHue = 0.16,
 		DefaultSat = 1,
 		DefaultValue = 1,
 		Function = function(hue, sat, val)
-			currentcolor = Color3.fromHSV(hue, sat, val)
+			textcolor = Color3.fromHSV(hue, sat, val)
 			update()
 		end,
 		Tooltip = 'Color of the skill text'
@@ -2327,13 +2331,8 @@ run(function()
 		Tooltip = 'Show background behind skill text'
 	})
 
-	skillesp:Clean(function()
-		enabled = false
-		disconnect()
-		clear()
-	end)
+	skillesp:Clean(stop)
 end)
-
 run(function()
     local Sprint
     local VirtualInputManager = game:GetService("VirtualInputManager")
