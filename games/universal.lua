@@ -5722,6 +5722,7 @@ end)
 		Grabbing an accurate count of the current framerate
 		Source: https://devforum.roblox.com/t/get-client-FPS-trough-a-script/282631
 	]]
+run(function()
 	local FPS
 	local label
 	
