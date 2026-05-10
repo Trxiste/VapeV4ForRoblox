@@ -5255,7 +5255,994 @@ run(function()
 		end
 	end)
 end)
-			
+
+\	
+run(function()
+	local Atmosphere
+	local Toggles = {}
+	local newobjects, oldobjects = {}, {}
+	local apidump = {
+		Sky = {
+			SkyboxUp = 'Text',
+			SkyboxDn = 'Text',
+			SkyboxLf = 'Text',
+			SkyboxRt = 'Text',
+			SkyboxFt = 'Text',
+			SkyboxBk = 'Text',
+			SunTextureId = 'Text',
+			SunAngularSize = 'Number',
+			MoonTextureId = 'Text',
+			MoonAngularSize = 'Number',
+			StarCount = 'Number'
+		},
+		Atmosphere = {
+			Color = 'Color',
+			Decay = 'Color',
+			Density = 'Number',
+			Offset = 'Number',
+			Glare = 'Number',
+			Haze = 'Number'
+		},
+		BloomEffect = {
+			Intensity = 'Number',
+			Size = 'Number',
+			Threshold = 'Number'
+		},
+		DepthOfFieldEffect = {
+			FarIntensity = 'Number',
+			FocusDistance = 'Number',
+			InFocusRadius = 'Number',
+			NearIntensity = 'Number'
+		},
+		SunRaysEffect = {
+			Intensity = 'Number',
+			Spread = 'Number'
+		},
+		ColorCorrectionEffect = {
+			TintColor = 'Color',
+			Saturation = 'Number',
+			Contrast = 'Number',
+			Brightness = 'Number'
+		}
+	}
+	
+	local function removeObject(v)
+		if not table.find(newobjects, v) then
+			local toggle = Toggles[v.ClassName]
+			if toggle and toggle.Toggle.Enabled then
+				if v.Parent then
+					table.insert(oldobjects, v)
+					v.Parent = game
+				end
+			end
+		end
+	end
+	
+	Atmosphere = vape.Legit:CreateModule({
+		Name = 'Atmosphere',
+		Function = function(callback)
+			if callback then
+				for _, v in lightingService:GetChildren() do
+					removeObject(v)
+				end
+				Atmosphere:Clean(lightingService.ChildAdded:Connect(function(v)
+					task.defer(removeObject, v)
+				end))
+	
+				for i, v in Toggles do
+					if v.Toggle.Enabled then
+						local obj = Instance.new(i)
+						for i2, v2 in v.Objects do
+							if v2.Type == 'ColorSlider' then
+								obj[i2] = Color3.fromHSV(v2.Hue, v2.Sat, v2.Value)
+							else
+								obj[i2] = apidump[i][i2] ~= 'Number' and v2.Value or tonumber(v2.Value) or 0
+							end
+						end
+						obj.Parent = lightingService
+						table.insert(newobjects, obj)
+					end
+				end
+			else
+				for _, v in newobjects do
+					v:Destroy()
+				end
+				for _, v in oldobjects do
+					v.Parent = lightingService
+				end
+				table.clear(newobjects)
+				table.clear(oldobjects)
+			end
+		end,
+		Tooltip = 'Custom lighting objects'
+	})
+	for i, v in apidump do
+		Toggles[i] = {Objects = {}}
+		Toggles[i].Toggle = Atmosphere:CreateToggle({
+			Name = i,
+			Function = function(callback)
+				if Atmosphere.Enabled then
+					Atmosphere:Toggle()
+					Atmosphere:Toggle()
+				end
+				for _, toggle in Toggles[i].Objects do
+					toggle.Object.Visible = callback
+				end
+			end
+		})
+	
+		for i2, v2 in v do
+			if v2 == 'Text' or v2 == 'Number' then
+				Toggles[i].Objects[i2] = Atmosphere:CreateTextBox({
+					Name = i2,
+					Function = function(enter)
+						if Atmosphere.Enabled and enter then
+							Atmosphere:Toggle()
+							Atmosphere:Toggle()
+						end
+					end,
+					Darker = true,
+					Default = v2 == 'Number' and '0' or nil,
+					Visible = false
+				})
+			elseif v2 == 'Color' then
+				Toggles[i].Objects[i2] = Atmosphere:CreateColorSlider({
+					Name = i2,
+					Function = function()
+						if Atmosphere.Enabled then
+							Atmosphere:Toggle()
+							Atmosphere:Toggle()
+						end
+					end,
+					Darker = true,
+					Visible = false
+				})
+			end
+		end
+	end
+end)
+	
+run(function()
+	local Breadcrumbs
+	local Texture
+	local Lifetime
+	local Thickness
+	local FadeIn
+	local FadeOut
+	local trail, point, point2
+	
+	Breadcrumbs = vape.Legit:CreateModule({
+		Name = 'Breadcrumbs',
+		Function = function(callback)
+			if callback then
+				point = Instance.new('Attachment')
+				point.Position = Vector3.new(0, Thickness.Value - 2.7, 0)
+				point2 = Instance.new('Attachment')
+				point2.Position = Vector3.new(0, -Thickness.Value - 2.7, 0)
+				trail = Instance.new('Trail')
+				trail.Texture = Texture.Value == '' and 'http://www.roblox.com/asset/?id=14166981368' or Texture.Value
+				trail.TextureMode = Enum.TextureMode.Static
+				trail.Color = ColorSequence.new(Color3.fromHSV(FadeIn.Hue, FadeIn.Sat, FadeIn.Value), Color3.fromHSV(FadeOut.Hue, FadeOut.Sat, FadeOut.Value))
+				trail.Lifetime = Lifetime.Value
+				trail.Attachment0 = point
+				trail.Attachment1 = point2
+				trail.FaceCamera = true
+	
+				Breadcrumbs:Clean(trail)
+				Breadcrumbs:Clean(point)
+				Breadcrumbs:Clean(point2)
+				Breadcrumbs:Clean(entitylib.Events.LocalAdded:Connect(function(ent)
+					point.Parent = ent.HumanoidRootPart
+					point2.Parent = ent.HumanoidRootPart
+					trail.Parent = gameCamera
+				end))
+				if entitylib.isAlive then
+					point.Parent = entitylib.character.RootPart
+					point2.Parent = entitylib.character.RootPart
+					trail.Parent = gameCamera
+				end
+			else
+				trail = nil
+				point = nil
+				point2 = nil
+			end
+		end,
+		Tooltip = 'Shows a trail behind your character'
+	})
+	Texture = Breadcrumbs:CreateTextBox({
+		Name = 'Texture',
+		Placeholder = 'Texture Id',
+		Function = function(enter)
+			if enter and trail then
+				trail.Texture = Texture.Value == '' and 'http://www.roblox.com/asset/?id=14166981368' or Texture.Value
+			end
+		end
+	})
+	FadeIn = Breadcrumbs:CreateColorSlider({
+		Name = 'Fade In',
+		Function = function(hue, sat, val)
+			if trail then
+				trail.Color = ColorSequence.new(Color3.fromHSV(hue, sat, val), Color3.fromHSV(FadeOut.Hue, FadeOut.Sat, FadeOut.Value))
+			end
+		end
+	})
+	FadeOut = Breadcrumbs:CreateColorSlider({
+		Name = 'Fade Out',
+		Function = function(hue, sat, val)
+			if trail then
+				trail.Color = ColorSequence.new(Color3.fromHSV(FadeIn.Hue, FadeIn.Sat, FadeIn.Value), Color3.fromHSV(hue, sat, val))
+			end
+		end
+	})
+	Lifetime = Breadcrumbs:CreateSlider({
+		Name = 'Lifetime',
+		Min = 1,
+		Max = 5,
+		Default = 3,
+		Decimal = 10,
+		Function = function(val)
+			if trail then
+				trail.Lifetime = val
+			end
+		end,
+		Suffix = function(val)
+			return val == 1 and 'second' or 'seconds'
+		end
+	})
+	Thickness = Breadcrumbs:CreateSlider({
+		Name = 'Thickness',
+		Min = 0,
+		Max = 2,
+		Default = 0.1,
+		Decimal = 100,
+		Function = function(val)
+			if point then
+				point.Position = Vector3.new(0, val - 2.7, 0)
+			end
+			if point2 then
+				point2.Position = Vector3.new(0, -val - 2.7, 0)
+			end
+		end,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+end)
+	
+run(function()
+	local Cape
+	local Texture
+	local part, motor
+	
+	local function createMotor(char)
+		if motor then 
+			motor:Destroy() 
+		end
+		part.Parent = gameCamera
+		motor = Instance.new('Motor6D')
+		motor.MaxVelocity = 0.08
+		motor.Part0 = part
+		motor.Part1 = char.Character:FindFirstChild('UpperTorso') or char.RootPart
+		motor.C0 = CFrame.new(0, 2, 0) * CFrame.Angles(0, math.rad(-90), 0)
+		motor.C1 = CFrame.new(0, motor.Part1.Size.Y / 2, 0.45) * CFrame.Angles(0, math.rad(90), 0)
+		motor.Parent = part
+	end
+	
+	Cape = vape.Legit:CreateModule({
+		Name = 'Cape',
+		Function = function(callback)
+			if callback then
+				part = Instance.new('Part')
+				part.Size = Vector3.new(2, 4, 0.1)
+				part.CanCollide = false
+				part.CanQuery = false
+				part.Massless = true
+				part.Transparency = 0
+				part.Material = Enum.Material.SmoothPlastic
+				part.Color = Color3.new()
+				part.CastShadow = false
+				part.Parent = gameCamera
+				local capesurface = Instance.new('SurfaceGui')
+				capesurface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+				capesurface.Adornee = part
+				capesurface.Parent = part
+	
+				if Texture.Value:find('.webm') then
+					local decal = Instance.new('VideoFrame')
+					decal.Video = getcustomasset(Texture.Value)
+					decal.Size = UDim2.fromScale(1, 1)
+					decal.BackgroundTransparency = 1
+					decal.Looped = true
+					decal.Parent = capesurface
+					decal:Play()
+				else
+					local decal = Instance.new('ImageLabel')
+					decal.Image = Texture.Value ~= '' and (Texture.Value:find('rbxasset') and Texture.Value or assetfunction(Texture.Value)) or 'rbxassetid://14637958134'
+					decal.Size = UDim2.fromScale(1, 1)
+					decal.BackgroundTransparency = 1
+					decal.Parent = capesurface
+				end
+				Cape:Clean(part)
+				Cape:Clean(entitylib.Events.LocalAdded:Connect(createMotor))
+				if entitylib.isAlive then
+					createMotor(entitylib.character)
+				end
+	
+				repeat
+					if motor and entitylib.isAlive then
+						local velo = math.min(entitylib.character.RootPart.Velocity.Magnitude, 90)
+						motor.DesiredAngle = math.rad(6) + math.rad(velo) + (velo > 1 and math.abs(math.cos(tick() * 5)) / 3 or 0)
+					end
+					capesurface.Enabled = (gameCamera.CFrame.Position - gameCamera.Focus.Position).Magnitude > 0.6
+					part.Transparency = (gameCamera.CFrame.Position - gameCamera.Focus.Position).Magnitude > 0.6 and 0 or 1
+					task.wait()
+				until not Cape.Enabled
+			else
+				part = nil
+				motor = nil
+			end
+		end,
+		Tooltip = 'Add\'s a cape to your character'
+	})
+	Texture = Cape:CreateTextBox({
+		Name = 'Texture'
+	})
+end)
+	
+run(function()
+	local ChinaHat
+	local Material
+	local Color
+	local hat
+	
+	ChinaHat = vape.Legit:CreateModule({
+		Name = 'China Hat',
+		Function = function(callback)
+			if callback then
+				if vape.ThreadFix then
+					setthreadidentity(8)
+				end
+				hat = Instance.new('MeshPart')
+				hat.Size = Vector3.new(3, 0.7, 3)
+				hat.Name = 'ChinaHat'
+				hat.Material = Enum.Material[Material.Value]
+				hat.Color = Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
+				hat.CanCollide = false
+				hat.CanQuery = false
+				hat.Massless = true
+				hat.MeshId = 'http://www.roblox.com/asset/?id=1778999'
+				hat.Transparency = 1 - Color.Opacity
+				hat.Parent = gameCamera
+				hat.CFrame = entitylib.isAlive and entitylib.character.Head.CFrame + Vector3.new(0, 1, 0) or CFrame.identity
+				local weld = Instance.new('WeldConstraint')
+				weld.Part0 = hat
+				weld.Part1 = entitylib.isAlive and entitylib.character.Head or nil
+				weld.Parent = hat
+				ChinaHat:Clean(hat)
+				ChinaHat:Clean(entitylib.Events.LocalAdded:Connect(function(char)
+					if weld then 
+						weld:Destroy() 
+					end
+					hat.Parent = gameCamera
+					hat.CFrame = char.Head.CFrame + Vector3.new(0, 1, 0)
+					hat.Velocity = Vector3.zero
+					weld = Instance.new('WeldConstraint')
+					weld.Part0 = hat
+					weld.Part1 = char.Head
+					weld.Parent = hat
+				end))
+	
+				repeat
+					hat.LocalTransparencyModifier = ((gameCamera.CFrame.Position - gameCamera.Focus.Position).Magnitude <= 0.6 and 1 or 0)
+					task.wait()
+				until not ChinaHat.Enabled
+			else
+				hat = nil
+			end
+		end,
+		Tooltip = 'Puts a china hat on your character (ty mastadawn)'
+	})
+	local materials = {'ForceField'}
+	for _, v in Enum.Material:GetEnumItems() do
+		if v.Name ~= 'ForceField' then
+			table.insert(materials, v.Name)
+		end
+	end
+	Material = ChinaHat:CreateDropdown({
+		Name = 'Material',
+		List = materials,
+		Function = function(val)
+			if hat then
+				hat.Material = Enum.Material[val]
+			end
+		end
+	})
+	Color = ChinaHat:CreateColorSlider({
+		Name = 'Hat Color',
+		DefaultOpacity = 0.7,
+		Function = function(hue, sat, val, opacity)
+			if hat then
+				hat.Color = Color3.fromHSV(hue, sat, val)
+				hat.Transparency = 1 - opacity
+			end
+		end
+	})
+end)
+	
+run(function()
+	local Clock
+	local TwentyFourHour
+	local label
+	
+	Clock = vape.Legit:CreateModule({
+		Name = 'Clock',
+		Function = function(callback)
+			if callback then
+				repeat
+					label.Text = DateTime.now():FormatLocalTime('LT', TwentyFourHour.Enabled and 'zh-cn' or 'en-us')
+					task.wait(1)
+				until not Clock.Enabled
+			end
+		end,
+		Size = UDim2.fromOffset(100, 41),
+		Tooltip = 'Shows the current local time'
+	})
+	Clock:CreateFont({
+		Name = 'Font',
+		Blacklist = 'Gotham',
+		Function = function(val)
+			label.FontFace = val
+		end
+	})
+	Clock:CreateColorSlider({
+		Name = 'Color',
+		DefaultValue = 0,
+		DefaultOpacity = 0.5,
+		Function = function(hue, sat, val, opacity)
+			label.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+			label.BackgroundTransparency = 1 - opacity
+		end
+	})
+	TwentyFourHour = Clock:CreateToggle({
+		Name = '24 Hour Clock'
+	})
+	label = Instance.new('TextLabel')
+	label.Size = UDim2.new(0, 100, 0, 41)
+	label.BackgroundTransparency = 0.5
+	label.TextSize = 15
+	label.Font = Enum.Font.Gotham
+	label.Text = '0:00 PM'
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.BackgroundColor3 = Color3.new()
+	label.Parent = Clock.Children
+	local corner = Instance.new('UICorner')
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = label
+end)
+	
+run(function()
+	local FOV
+	local Value
+	local oldfov
+	
+	FOV = vape.Legit:CreateModule({
+		Name = 'FOV',
+		Function = function(callback)
+			if callback then
+				oldfov = gameCamera.FieldOfView
+				repeat
+					gameCamera.FieldOfView = Value.Value
+					task.wait()
+				until not FOV.Enabled
+			else
+				gameCamera.FieldOfView = oldfov
+			end
+		end,
+		Tooltip = 'Adjusts camera vision'
+	})
+	Value = FOV:CreateSlider({
+		Name = 'FOV',
+		Min = 30,
+		Max = 120
+	})
+end)
+	
+run(function()
+	--[[
+		Grabbing an accurate count of the current framerate
+		Source: https://devforum.roblox.com/t/get-client-FPS-trough-a-script/282631
+	]]
+	local FPS
+	local label
+	
+	FPS = vape.Legit:CreateModule({
+		Name = 'FPS',
+		Function = function(callback)
+			if callback then
+				local frames = {}
+				local startClock = os.clock()
+				local updateTick = tick()
+				FPS:Clean(runService.Heartbeat:Connect(function()
+					local updateClock = os.clock()
+					for i = #frames, 1, -1 do
+						frames[i + 1] = frames[i] >= updateClock - 1 and frames[i] or nil
+					end
+					frames[1] = updateClock
+					if updateTick < tick() then
+						updateTick = tick() + 1
+						label.Text = math.floor(os.clock() - startClock >= 1 and #frames or #frames / (os.clock() - startClock))..' FPS'
+					end
+				end))
+			end
+		end,
+		Size = UDim2.fromOffset(100, 41),
+		Tooltip = 'Shows the current framerate'
+	})
+	FPS:CreateFont({
+		Name = 'Font',
+		Blacklist = 'Gotham',
+		Function = function(val)
+			label.FontFace = val
+		end
+	})
+	FPS:CreateColorSlider({
+		Name = 'Color',
+		DefaultValue = 0,
+		DefaultOpacity = 0.5,
+		Function = function(hue, sat, val, opacity)
+			label.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+			label.BackgroundTransparency = 1 - opacity
+		end
+	})
+	label = Instance.new('TextLabel')
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 0.5
+	label.TextSize = 15
+	label.Font = Enum.Font.Gotham
+	label.Text = 'inf FPS'
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.BackgroundColor3 = Color3.new()
+	label.Parent = FPS.Children
+	local corner = Instance.new('UICorner')
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = label
+end)
+	
+run(function()
+	local Keystrokes
+	local Style
+	local Color
+	local keys, holder = {}
+	
+	local function createKeystroke(keybutton, pos, pos2, text)
+		if keys[keybutton] then
+			keys[keybutton].Key:Destroy()
+			keys[keybutton] = nil
+		end
+		local key = Instance.new('Frame')
+		key.Size = keybutton == Enum.KeyCode.Space and UDim2.new(0, 110, 0, 24) or UDim2.new(0, 34, 0, 36)
+		key.BackgroundColor3 = Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
+		key.BackgroundTransparency = 1 - Color.Opacity
+		key.Position = pos
+		key.Name = keybutton.Name
+		key.Parent = holder
+		local keytext = Instance.new('TextLabel')
+		keytext.BackgroundTransparency = 1
+		keytext.Size = UDim2.fromScale(1, 1)
+		keytext.Font = Enum.Font.Gotham
+		keytext.Text = text or keybutton.Name
+		keytext.TextXAlignment = Enum.TextXAlignment.Left
+		keytext.TextYAlignment = Enum.TextYAlignment.Top
+		keytext.Position = pos2
+		keytext.TextSize = keybutton == Enum.KeyCode.Space and 18 or 15
+		keytext.TextColor3 = Color3.new(1, 1, 1)
+		keytext.Parent = key
+		local corner = Instance.new('UICorner')
+		corner.CornerRadius = UDim.new(0, 4)
+		corner.Parent = key
+		keys[keybutton] = {Key = key}
+	end
+	
+	Keystrokes = vape.Legit:CreateModule({
+		Name = 'Keystrokes',
+		Function = function(callback)
+			if callback then
+				createKeystroke(Enum.KeyCode.W, UDim2.new(0, 38, 0, 0), UDim2.new(0, 6, 0, 5), Style.Value == 'Arrow' and '↑' or nil)
+				createKeystroke(Enum.KeyCode.S, UDim2.new(0, 38, 0, 42), UDim2.new(0, 8, 0, 5), Style.Value == 'Arrow' and '↓' or nil)
+				createKeystroke(Enum.KeyCode.A, UDim2.new(0, 0, 0, 42), UDim2.new(0, 7, 0, 5), Style.Value == 'Arrow' and '←' or nil)
+				createKeystroke(Enum.KeyCode.D, UDim2.new(0, 76, 0, 42), UDim2.new(0, 8, 0, 5), Style.Value == 'Arrow' and '→' or nil)
+	
+				Keystrokes:Clean(inputService.InputBegan:Connect(function(inputType)
+					local key = keys[inputType.KeyCode]
+					if key then
+						if key.Tween then
+							key.Tween:Cancel()
+						end
+						if key.Tween2 then
+							key.Tween2:Cancel()
+						end
+	
+						key.Pressed = true
+						key.Tween = tweenService:Create(key.Key, TweenInfo.new(0.1), {
+							BackgroundColor3 = Color3.new(1, 1, 1), 
+							BackgroundTransparency = 0
+						})
+						key.Tween2 = tweenService:Create(key.Key.TextLabel, TweenInfo.new(0.1), {
+							TextColor3 = Color3.new()
+						})
+						key.Tween:Play()
+						key.Tween2:Play()
+					end
+				end))
+	
+				Keystrokes:Clean(inputService.InputEnded:Connect(function(inputType)
+					local key = keys[inputType.KeyCode]
+					if key then
+						if key.Tween then
+							key.Tween:Cancel()
+						end
+						if key.Tween2 then
+							key.Tween2:Cancel()
+						end
+	
+						key.Pressed = false
+						key.Tween = tweenService:Create(key.Key, TweenInfo.new(0.1), {
+							BackgroundColor3 = Color3.fromHSV(Color.Hue, Color.Sat, Color.Value), 
+							BackgroundTransparency = 1 - Color.Opacity
+						})
+						key.Tween2 = tweenService:Create(key.Key.TextLabel, TweenInfo.new(0.1), {
+							TextColor3 = Color3.new(1, 1, 1)
+						})
+						key.Tween:Play()
+						key.Tween2:Play()
+					end
+				end))
+			end
+		end,
+		Size = UDim2.fromOffset(110, 176),
+		Tooltip = 'Shows movement keys onscreen'
+	})
+	holder = Instance.new('Frame')
+	holder.Size = UDim2.fromScale(1, 1)
+	holder.BackgroundTransparency = 1
+	holder.Parent = Keystrokes.Children
+	Style = Keystrokes:CreateDropdown({
+		Name = 'Key Style',
+		List = {'Keyboard', 'Arrow'},
+		Function = function()
+			if Keystrokes.Enabled then
+				Keystrokes:Toggle()
+				Keystrokes:Toggle()
+			end
+		end
+	})
+	Color = Keystrokes:CreateColorSlider({
+		Name = 'Color',
+		DefaultValue = 0,
+		DefaultOpacity = 0.5,
+		Function = function(hue, sat, val, opacity)
+			for _, v in keys do
+				if not v.Pressed then
+					v.Key.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+					v.Key.BackgroundTransparency = 1 - opacity
+				end
+			end
+		end
+	})
+	Keystrokes:CreateToggle({
+		Name = 'Show Spacebar',
+		Function = function(callback)
+			Keystrokes.Children.Size = UDim2.fromOffset(110, callback and 107 or 78)
+			if callback then
+				createKeystroke(Enum.KeyCode.Space, UDim2.new(0, 0, 0, 83), UDim2.new(0, 25, 0, -10), '______')
+			else
+				keys[Enum.KeyCode.Space].Key:Destroy()
+				keys[Enum.KeyCode.Space] = nil
+			end
+		end,
+		Default = true
+	})
+end)
+	
+run(function()
+	local Memory
+	local label
+	
+	Memory = vape.Legit:CreateModule({
+		Name = 'Memory',
+		Function = function(callback)
+			if callback then
+				repeat
+					label.Text = math.floor(tonumber(game:GetService('Stats'):FindFirstChild('PerformanceStats').Memory:GetValue()))..' MB'
+					task.wait(1)
+				until not Memory.Enabled
+			end
+		end,
+		Size = UDim2.fromOffset(100, 41),
+		Tooltip = 'A label showing the memory currently used by roblox'
+	})
+	Memory:CreateFont({
+		Name = 'Font',
+		Blacklist = 'Gotham',
+		Function = function(val)
+			label.FontFace = val
+		end
+	})
+	Memory:CreateColorSlider({
+		Name = 'Color',
+		DefaultValue = 0,
+		DefaultOpacity = 0.5,
+		Function = function(hue, sat, val, opacity)
+			label.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+			label.BackgroundTransparency = 1 - opacity
+		end
+	})
+	label = Instance.new('TextLabel')
+	label.Size = UDim2.new(0, 100, 0, 41)
+	label.BackgroundTransparency = 0.5
+	label.TextSize = 15
+	label.Font = Enum.Font.Gotham
+	label.Text = '0 MB'
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.BackgroundColor3 = Color3.new()
+	label.Parent = Memory.Children
+	local corner = Instance.new('UICorner')
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = label
+end)
+	
+run(function()
+	local Ping
+	local label
+	
+	Ping = vape.Legit:CreateModule({
+		Name = 'Ping',
+		Function = function(callback)
+			if callback then
+				repeat
+					label.Text = math.floor(tonumber(game:GetService('Stats'):FindFirstChild('PerformanceStats').Ping:GetValue()))..' ms'
+					task.wait(1)
+				until not Ping.Enabled
+			end
+		end,
+		Size = UDim2.fromOffset(100, 41),
+		Tooltip = 'Shows the current connection speed to the roblox server'
+	})
+	Ping:CreateFont({
+		Name = 'Font',
+		Blacklist = 'Gotham',
+		Function = function(val)
+			label.FontFace = val
+		end
+	})
+	Ping:CreateColorSlider({
+		Name = 'Color',
+		DefaultValue = 0,
+		DefaultOpacity = 0.5,
+		Function = function(hue, sat, val, opacity)
+			label.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+			label.BackgroundTransparency = 1 - opacity
+		end
+	})
+	label = Instance.new('TextLabel')
+	label.Size = UDim2.new(0, 100, 0, 41)
+	label.BackgroundTransparency = 0.5
+	label.TextSize = 15
+	label.Font = Enum.Font.Gotham
+	label.Text = '0 ms'
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.BackgroundColor3 = Color3.new()
+	label.Parent = Ping.Children
+	local corner = Instance.new('UICorner')
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = label
+end)
+	
+run(function()
+	local SongBeats
+	local List
+	local FOV
+	local FOVValue = {}
+	local Volume
+	local alreadypicked = {}
+	local beattick = tick()
+	local oldfov, songobj, songbpm, songtween
+	
+	local function choosesong()
+		local list = List.ListEnabled
+		if #alreadypicked >= #list then
+			table.clear(alreadypicked)
+		end
+	
+		if #list <= 0 then
+			notif('SongBeats', 'no songs', 10)
+			SongBeats:Toggle()
+			return
+		end
+	
+		local chosensong = list[math.random(1, #list)]
+		if #list > 1 and table.find(alreadypicked, chosensong) then
+			repeat
+				task.wait()
+				chosensong = list[math.random(1, #list)]
+			until not table.find(alreadypicked, chosensong) or not SongBeats.Enabled
+		end
+		if not SongBeats.Enabled then return end
+	
+		local split = chosensong:split('/')
+		if not isfile(split[1]) then
+			notif('SongBeats', 'Missing song ('..split[1]..')', 10)
+			SongBeats:Toggle()
+			return
+		end
+	
+		songobj.SoundId = assetfunction(split[1])
+		repeat task.wait() until songobj.IsLoaded or not SongBeats.Enabled
+		if SongBeats.Enabled then
+			beattick = tick() + (tonumber(split[3]) or 0)
+			songbpm = 60 / (tonumber(split[2]) or 50)
+			songobj:Play()
+		end
+	end
+	
+	SongBeats = vape.Legit:CreateModule({
+		Name = 'Song Beats',
+		Function = function(callback)
+			if callback then
+				songobj = Instance.new('Sound')
+				songobj.Volume = Volume.Value / 100
+				songobj.Parent = workspace
+				oldfov = gameCamera.FieldOfView
+	
+				repeat
+					if not songobj.Playing then
+						choosesong()
+					end
+					if beattick < tick() and SongBeats.Enabled and FOV.Enabled then
+						beattick = tick() + songbpm
+						gameCamera.FieldOfView = oldfov - FOVValue.Value
+						songtween = tweenService:Create(gameCamera, TweenInfo.new(math.min(songbpm, 0.2), Enum.EasingStyle.Linear), {
+							FieldOfView = oldfov
+						})
+						songtween:Play()
+					end
+					task.wait()
+				until not SongBeats.Enabled
+			else
+				if songobj then
+					songobj:Destroy()
+				end
+				if songtween then
+					songtween:Cancel()
+				end
+				if oldfov then
+					gameCamera.FieldOfView = oldfov
+				end
+				table.clear(alreadypicked)
+			end
+		end,
+		Tooltip = 'Built in mp3 player'
+	})
+	List = SongBeats:CreateTextList({
+		Name = 'Songs',
+		Placeholder = 'filepath/bpm/start'
+	})
+	FOV = SongBeats:CreateToggle({
+		Name = 'Beat FOV',
+		Function = function(callback)
+			if FOVValue.Object then
+				FOVValue.Object.Visible = callback
+			end
+			if SongBeats.Enabled then
+				SongBeats:Toggle()
+				SongBeats:Toggle()
+			end
+		end,
+		Default = true
+	})
+	FOVValue = SongBeats:CreateSlider({
+		Name = 'Adjustment',
+		Min = 1,
+		Max = 30,
+		Default = 5,
+		Darker = true
+	})
+	Volume = SongBeats:CreateSlider({
+		Name = 'Volume',
+		Function = function(val)
+			if songobj then
+				songobj.Volume = val / 100
+			end
+		end,
+		Min = 1,
+		Max = 100,
+		Default = 100,
+		Suffix = '%'
+	})
+end)
+	
+run(function()
+	local Speedmeter
+	local label
+	
+	Speedmeter = vape.Legit:CreateModule({
+		Name = 'Speedmeter',
+		Function = function(callback)
+			if callback then
+				repeat
+					local lastpos = entitylib.isAlive and entitylib.character.HumanoidRootPart.Position * Vector3.new(1, 0, 1) or Vector3.zero
+					local dt = task.wait(0.2)
+					local newpos = entitylib.isAlive and entitylib.character.HumanoidRootPart.Position * Vector3.new(1, 0, 1) or Vector3.zero
+					label.Text = math.round(((lastpos - newpos) / dt).Magnitude)..' sps'
+				until not Speedmeter.Enabled
+			end
+		end,
+		Size = UDim2.fromOffset(100, 41),
+		Tooltip = 'A label showing the average velocity in studs'
+	})
+	Speedmeter:CreateFont({
+		Name = 'Font',
+		Blacklist = 'Gotham',
+		Function = function(val)
+			label.FontFace = val
+		end
+	})
+	Speedmeter:CreateColorSlider({
+		Name = 'Color',
+		DefaultValue = 0,
+		DefaultOpacity = 0.5,
+		Function = function(hue, sat, val, opacity)
+			label.BackgroundColor3 = Color3.fromHSV(hue, sat, val)
+			label.BackgroundTransparency = 1 - opacity
+		end
+	})
+	label = Instance.new('TextLabel')
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 0.5
+	label.TextSize = 15
+	label.Font = Enum.Font.Gotham
+	label.Text = '0 sps'
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.BackgroundColor3 = Color3.new()
+	label.Parent = Speedmeter.Children
+	local corner = Instance.new('UICorner')
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = label
+end)
+	
+run(function()
+	local TimeChanger
+	local Value
+	local old
+	
+	TimeChanger = vape.Legit:CreateModule({
+		Name = 'Time Changer',
+		Function = function(callback)
+			if callback then
+				old = lightingService.TimeOfDay
+				lightingService.TimeOfDay = Value.Value..':00:00'
+			else
+				lightingService.TimeOfDay = old
+				old = nil
+			end
+		end,
+		Tooltip = 'Change the time of the current world'
+	})
+	Value = TimeChanger:CreateSlider({
+		Name = 'Time',
+		Min = 0,
+		Max = 24,
+		Default = 12,
+		Function = function(val)
+			if TimeChanger.Enabled then 
+				lightingService.TimeOfDay = val..':00:00'
+			end
+		end
+	})
+	
+end)
+	
+
 if vape and vape.CreateNotification then
     vape:CreateNotification(
         "Welcome",
