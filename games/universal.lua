@@ -2151,6 +2151,14 @@ run(function()
 	local playerconnections = {}
 	local objects = {}
 
+	local function isenabled()
+		return skillesp and skillesp.Enabled
+	end
+
+	local function safeenabled(option)
+		return option and option.Enabled or false
+	end
+
 	local function getskill(plr)
 		local data = plr:FindFirstChild('Data')
 		data = data and data:FindFirstChild('SelectedSkill')
@@ -2159,15 +2167,23 @@ run(function()
 
 	local function remove(plr)
 		local obj = objects[plr]
-		if obj then
-			if obj.Text then
+		if not obj then return end
+
+		if obj.Text then
+			pcall(function()
+				obj.Text.Visible = false
 				obj.Text:Remove()
-			end
-			if obj.Background then
-				obj.Background:Remove()
-			end
-			objects[plr] = nil
+			end)
 		end
+
+		if obj.Background then
+			pcall(function()
+				obj.Background.Visible = false
+				obj.Background:Remove()
+			end)
+		end
+
+		objects[plr] = nil
 	end
 
 	local function create(plr)
@@ -2196,26 +2212,47 @@ run(function()
 		return objects[plr]
 	end
 
+	local function hide(plr)
+		local obj = objects[plr]
+		if not obj then return end
+
+		if obj.Text then
+			obj.Text.Visible = false
+		end
+
+		if obj.Background then
+			obj.Background.Visible = false
+		end
+	end
+
 	local function updateplayer(plr)
 		if plr == lplr then return end
 
-		local obj = objects[plr] or create(plr)
-		if not obj then return end
+		if not isenabled() then
+			hide(plr)
+			return
+		end
 
 		local char = plr.Character
 		local head = char and char:FindFirstChild('Head')
 		local camera = workspace.CurrentCamera
 
-		if not char or not head or not camera or (teamcheck.Enabled and lplr.Team and plr.Team and lplr.Team == plr.Team) then
-			obj.Text.Visible = false
-			obj.Background.Visible = false
+		if not char or not head or not camera then
+			hide(plr)
 			return
 		end
 
+		if safeenabled(teamcheck) and lplr.Team and plr.Team and lplr.Team == plr.Team then
+			hide(plr)
+			return
+		end
+
+		local obj = objects[plr] or create(plr)
+		if not obj then return end
+
 		local pos, visible = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.2, 0))
 		if not visible or pos.Z <= 0 then
-			obj.Text.Visible = false
-			obj.Background.Visible = false
+			hide(plr)
 			return
 		end
 
@@ -2224,7 +2261,7 @@ run(function()
 		obj.Text.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2), pos.Y - 20)
 		obj.Text.Visible = true
 
-		if background.Enabled then
+		if safeenabled(background) then
 			obj.Background.Size = Vector2.new(obj.Text.TextBounds.X + 8, obj.Text.TextBounds.Y + 4)
 			obj.Background.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2) - 4, pos.Y - 22)
 			obj.Background.Visible = true
@@ -2234,6 +2271,8 @@ run(function()
 	end
 
 	local function update()
+		if not isenabled() then return end
+
 		for _, plr in playersService:GetPlayers() do
 			if plr ~= lplr then
 				updateplayer(plr)
@@ -2249,8 +2288,12 @@ run(function()
 
 	local function bind(plr)
 		if plr == lplr or playerconnections[plr] then return end
+
 		playerconnections[plr] = plr.CharacterAdded:Connect(function()
 			remove(plr)
+			if isenabled() then
+				task.defer(updateplayer, plr)
+			end
 		end)
 	end
 
@@ -2260,6 +2303,7 @@ run(function()
 			conn:Disconnect()
 			playerconnections[plr] = nil
 		end
+
 		remove(plr)
 	end
 
@@ -2274,33 +2318,60 @@ run(function()
 			connection:Disconnect()
 			connection = nil
 		end
+
 		if addedconnection then
 			addedconnection:Disconnect()
 			addedconnection = nil
 		end
+
 		if removingconnection then
 			removingconnection:Disconnect()
 			removingconnection = nil
 		end
+
 		for plr, conn in playerconnections do
 			conn:Disconnect()
 			playerconnections[plr] = nil
 		end
+
 		clear()
+	end
+
+	local function start()
+		stop()
+
+		if not Drawing then return end
+
+		for _, plr in playersService:GetPlayers() do
+			bind(plr)
+		end
+
+		addedconnection = playersService.PlayerAdded:Connect(function(plr)
+			bind(plr)
+			if isenabled() then
+				task.defer(updateplayer, plr)
+			end
+		end)
+
+		removingconnection = playersService.PlayerRemoving:Connect(unbind)
+
+		connection = runService.RenderStepped:Connect(function()
+			if not isenabled() then
+				stop()
+				return
+			end
+
+			update()
+		end)
+
+		update()
 	end
 
 	skillesp = vape.Categories.Render:CreateModule({
 		Name = 'SkillESP',
 		Function = function(callback)
 			if callback then
-				for _, plr in playersService:GetPlayers() do
-					bind(plr)
-				end
-
-				addedconnection = playersService.PlayerAdded:Connect(bind)
-				removingconnection = playersService.PlayerRemoving:Connect(unbind)
-				connection = runService.RenderStepped:Connect(update)
-				update()
+				start()
 			else
 				stop()
 			end
@@ -2311,7 +2382,23 @@ run(function()
 	teamcheck = skillesp:CreateToggle({
 		Name = 'Team Check',
 		Default = false,
+		Function = function()
+			if isenabled() then
+				update()
+			end
+		end,
 		Tooltip = 'Only show enemy skills'
+	})
+
+	background = skillesp:CreateToggle({
+		Name = 'Show Background',
+		Default = true,
+		Function = function()
+			if isenabled() then
+				update()
+			end
+		end,
+		Tooltip = 'Show background behind skill text'
 	})
 
 	coloroption = skillesp:CreateColorSlider({
@@ -2321,19 +2408,17 @@ run(function()
 		DefaultValue = 1,
 		Function = function(hue, sat, val)
 			textcolor = Color3.fromHSV(hue, sat, val)
-			update()
+
+			if isenabled() then
+				update()
+			end
 		end,
 		Tooltip = 'Color of the skill text'
 	})
 
-	background = skillesp:CreateToggle({
-		Name = 'Show Background',
-		Default = true,
-		Tooltip = 'Show background behind skill text'
-	})
-
 	skillesp:Clean(stop)
 end)
+																																			
 run(function()
     local Sprint
     local VirtualInputManager = game:GetService("VirtualInputManager")
