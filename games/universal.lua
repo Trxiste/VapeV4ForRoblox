@@ -2458,368 +2458,387 @@ run(function()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
     end)
 end)
-
+                                  
 run(function()
-    local HitboxExtender
-    local ballMultiplier = 1.35
-    local patchedData = {}
-    local originalRequire = nil
-    local hooked = false
+	local replicatedstorage = game:GetService('ReplicatedStorage')
+	local hitboxextender
+	local slider
+	local handler
+	local size = 13.5
 
-    local function wrapCreate(origCreate, getMultiplier)
-        return function(config, ...)
-            if type(config) == "table" and config.size then
-                config.size = config.size * getMultiplier()
-            end
-            return origCreate(config, ...)
-        end
-    end
+	local function gethandler(name)
+		local modules = replicatedstorage:FindFirstChild('Modules')
+		local obj = modules and modules:FindFirstChild(name, true) or replicatedstorage:FindFirstChild(name, true)
+		if not obj then return end
 
-    local function patchModuleInstance(module, getMultiplier)
-        if module and module.Create and type(module.Create) == "function" then
-            local original = module.Create
-            module.Create = wrapCreate(original, getMultiplier)
-            table.insert(patchedData, { module = module, original = original })
-            return true
-        end
-        return false
-    end
+		local suc, res = pcall(function()
+			return require(obj)
+		end)
 
-    HitboxExtender = vape.Categories.Blatant:CreateModule({
-        Name = 'HitboxExtender',
-        Function = function(callback)
-            if callback then
-                if not hooked then
-                    originalRequire = require
-                    hooked = true
-                    require = function(mod)
-                        local result = originalRequire(mod)
-                        local fullName = type(mod) == "Instance" and mod:GetFullName() or ""
-                        if fullName:find("HitboxHandler") and not fullName:find("HitboxHandlerPlayers") then
-                            patchModuleInstance(result, function() return ballMultiplier end)
-                        end
-                        return result
-                    end
-                end
-                
-                local repStorage = game:GetService("ReplicatedStorage")
-                local modules = repStorage and repStorage:FindFirstChild("Modules")
-                if modules then
-                    local handler = modules:FindFirstChild("HitboxHandler")
-                    if handler then
-                        local mod = originalRequire and originalRequire(handler) or require(handler)
-                        patchModuleInstance(mod, function() return ballMultiplier end)
-                    end
-                end
-            else
-                for _, data in ipairs(patchedData) do
-                    data.module.Create = data.original
-                end
-                patchedData = {}
-                
-                if hooked then
-                    require = originalRequire
-                    hooked = false
-                end
-            end
-        end,
-        Tooltip = 'Expands ball hitbox'
-    })
-
-    HitboxExtender:CreateSlider({
-        Name = 'Ball hitbox size',
-        Min = 1,
-        Max = 35,
-        Default = 13.5,
-        Decimal = 10,
-        Function = function(val)
-            ballMultiplier = val / 10
-        end,
-        Suffix = function(val)
-            return string.format('%.2fx', val / 10)
-        end
-    })
-end)
-
-run(function()
-    local PhysicalReach
-    local playerMultiplier = 1.35
-    local patchedData = {}
-    local originalRequire = nil
-    local hooked = false
-
-    local function wrapCreate(origCreate, getMultiplier)
-        return function(config, ...)
-            if type(config) == "table" and config.size then
-                config.size = config.size * getMultiplier()
-            end
-            return origCreate(config, ...)
-        end
-    end
-
-    local function patchModuleInstance(module, getMultiplier)
-        if module and module.Create and type(module.Create) == "function" then
-            local original = module.Create
-            module.Create = wrapCreate(original, getMultiplier)
-            table.insert(patchedData, { module = module, original = original })
-            return true
-        end
-        return false
-    end
-
-    PhysicalReach = vape.Categories.Blatant:CreateModule({
-        Name = 'PhysicalReach',
-        Function = function(callback)
-            if callback then
-                                     
-                if not hooked then
-                    originalRequire = require
-                    hooked = true
-                    require = function(mod)
-                        local result = originalRequire(mod)
-                        local fullName = type(mod) == "Instance" and mod:GetFullName() or ""
-                        if fullName:find("HitboxHandlerPlayers") then
-                            patchModuleInstance(result, function() return playerMultiplier end)
-                        end
-                        return result
-                    end
-                end
-                
-                                              
-                local repStorage = game:GetService("ReplicatedStorage")
-                local modules = repStorage and repStorage:FindFirstChild("Modules")
-                if modules then
-                    local handler = modules:FindFirstChild("HitboxHandlerPlayers")
-                    if handler then
-                        local mod = originalRequire and originalRequire(handler) or require(handler)
-                        patchModuleInstance(mod, function() return playerMultiplier end)
-                    end
-                end
-            else
-                                    
-                for _, data in ipairs(patchedData) do
-                    data.module.Create = data.original
-                end
-                patchedData = {}
-                
-                if hooked then
-                    require = originalRequire
-                    hooked = false
-                end
-            end
-        end,
-        Tooltip = 'Expands player hitboxes'
-    })
-
-    PhysicalReach:CreateSlider({
-        Name = 'Player hitbox size',
-        Min = 1,
-        Max = 35,
-        Default = 13.5,
-        Decimal = 10,
-        Function = function(val)
-            playerMultiplier = val / 10
-        end,
-        Suffix = function(val)
-            return string.format('%.2fx', val / 10)
-        end
-    })
-end)
-
-run(function()
-	                                                  
-	local ALLHBE
-	local SizeSlider
-	local multiplier = 1.35
-	local originalRequire = nil
-	local hooked = false
-	local wrappedModules = {}                            
-
-	                                                          
-	                                             
-	local function isAlreadyWrapped(func)
-		return wrappedModules[func] ~= nil
+		return suc and type(res) == 'table' and res or nil
 	end
 
-	local function markWrapped(func, original)
-		wrappedModules[func] = original
+	local function copyconfig(config)
+		local newconfig = {}
+		for i, v in pairs(config) do
+			newconfig[i] = v
+		end
+		return newconfig
 	end
 
-	local function getOriginal(func)
-		return wrappedModules[func]
+	local function setsize(config, value)
+		if type(config) ~= 'table' or config.size == nil then
+			return config
+		end
+
+		local newconfig = copyconfig(config)
+
+		if typeof(newconfig.size) == 'Vector3' then
+			newconfig.size = Vector3.new(value, value, value)
+		else
+			newconfig.size = value
+		end
+
+		return newconfig
 	end
 
-	                                                           
-	local function createPatchedCreate(originalCreate)
-		                                
-		if isAlreadyWrapped(originalCreate) then
-			return originalCreate
+	local function wrap(module, isplayer)
+		if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
+
+		if not module.__vapehbeoriginal then
+			module.__vapehbeoriginal = module.Create
 		end
 
-		local patched = function(config, ...)
-			if type(config) == "table" and config.size then
-				config.size = config.size * multiplier
-			end
-			return originalCreate(config, ...)
-		end
+		module.__vapehbeisplayer = isplayer
 
-		markWrapped(patched, originalCreate)
-		return patched
-	end
+		if module.__vapehbewrapped then return end
+		module.__vapehbewrapped = true
 
-	                                                                  
-	local function patchModule(module, name)
-		if not module or type(module) ~= "table" then
-			return false
-		end
-		if not module.Create or type(module.Create) ~= "function" then
-			return false
-		end
+		module.Create = function(config, ...)
+			local value
 
-		                           
-		if isAlreadyWrapped(module.Create) then
-			return false
-		end
-
-		module.Create = createPatchedCreate(module.Create)
-		return true
-	end
-
-	                                                             
-	local function unpatchModule(module)
-		if not module or not module.Create then
-			return
-		end
-
-		local original = getOriginal(module.Create)
-		if original then
-			module.Create = original
-			wrappedModules[module.Create] = nil
-		end
-	end
-
-	                                                            
-	local function restoreRequire()
-		if hooked and originalRequire then
-			require = originalRequire
-			hooked = false
-			originalRequire = nil
-		end
-	end
-
-	                                                           
-	local targetPaths = {
-		"HitboxHandler",
-		"HitboxHandlerPlayers"
-	}
-
-	local function shouldPatch(fullName)
-		if not fullName or type(fullName) ~= "string" then
-			return false
-		end
-		for _, name in ipairs(targetPaths) do
-			if fullName:find(name) then
-				return true
-			end
-		end
-		return false
-	end
-                                 
-	local function setupRequireHook()
-		if hooked then return end
-
-		originalRequire = require
-		hooked = true
-
-		require = function(module)
-			local result = originalRequire(module)
-
-			                                   
-			local fullName = nil
-			if type(module) == "string" then
-				fullName = module
-			elseif type(module) == "Instance" and module:IsA("ModuleScript") then
-				fullName = module:GetFullName()
-			end
-
-			if fullName and shouldPatch(fullName) then
-				patchModule(result, fullName)
-			end
-
-			return result
-		end
-	end
-
-	                                                          
-	local function patchExistingModules()
-		local repStorage = game:GetService("ReplicatedStorage")
-		if not repStorage then return end
-
-		local modulesFolder = repStorage:FindFirstChild("Modules")
-		if not modulesFolder then return end
-
-		for _, name in ipairs(targetPaths) do
-			local mod = modulesFolder:FindFirstChild(name)
-			if mod then
-				local suc, result = pcall(function()
-					return originalRequire and originalRequire(mod) or require(mod)
-				end)
-				if suc and result then
-					patchModule(result, name)
+			if module.__vapehbeallenabled then
+				value = module.__vapehbeallsize
+			elseif module.__vapehbeisplayer then
+				if module.__vapehbeplayerenabled then
+					value = module.__vapehbeplayersize
 				end
+			elseif module.__vapehbeballenabled then
+				value = module.__vapehbeballsize
 			end
+
+			if value then
+				config = setsize(config, value)
+			end
+
+			return module.__vapehbeoriginal(config, ...)
 		end
 	end
 
-	                                                    
-	local function cleanup()
-		                              
-		for func, original in pairs(wrappedModules) do
-			                                                                 
-			                                                                        
-			                                
-			wrappedModules[func] = nil
-		end
+	local function update()
+		handler = handler or gethandler('HitboxHandler')
+		if not handler then return end
 
-		                  
-		restoreRequire()
-
-		                   
-		multiplier = 1.35
+		wrap(handler, false)
+		handler.__vapehbeballenabled = hitboxextender.Enabled
+		handler.__vapehbeballsize = size
 	end
 
-	                                                        
-	ALLHBE = vape.Categories.Blatant:CreateModule({
+	hitboxextender = vape.Categories.Blatant:CreateModule({
+		Name = 'HitboxExtender',
+		Function = function(callback)
+			update()
+			if not callback and handler then
+				handler.__vapehbeballenabled = false
+			end
+		end,
+		Tooltip = 'Expands ball hitbox'
+	})
+
+	slider = hitboxextender:CreateSlider({
+		Name = 'Ball hitbox size',
+		Min = 1,
+		Max = 35,
+		Default = 13.5,
+		Decimal = 10,
+		Function = function(val)
+			size = val
+			if handler then
+				handler.__vapehbeballsize = val
+			end
+		end,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+
+	hitboxextender:Clean(function()
+		if handler then
+			handler.__vapehbeballenabled = false
+		end
+	end)
+end)
+
+run(function()
+	local replicatedstorage = game:GetService('ReplicatedStorage')
+	local physicalreach
+	local slider
+	local handler
+	local size = 13.5
+
+	local function gethandler(name)
+		local modules = replicatedstorage:FindFirstChild('Modules')
+		local obj = modules and modules:FindFirstChild(name, true) or replicatedstorage:FindFirstChild(name, true)
+		if not obj then return end
+
+		local suc, res = pcall(function()
+			return require(obj)
+		end)
+
+		return suc and type(res) == 'table' and res or nil
+	end
+
+	local function copyconfig(config)
+		local newconfig = {}
+		for i, v in pairs(config) do
+			newconfig[i] = v
+		end
+		return newconfig
+	end
+
+	local function setsize(config, value)
+		if type(config) ~= 'table' or config.size == nil then
+			return config
+		end
+
+		local newconfig = copyconfig(config)
+
+		if typeof(newconfig.size) == 'Vector3' then
+			newconfig.size = Vector3.new(value, value, value)
+		else
+			newconfig.size = value
+		end
+
+		return newconfig
+	end
+
+	local function wrap(module, isplayer)
+		if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
+
+		if not module.__vapehbeoriginal then
+			module.__vapehbeoriginal = module.Create
+		end
+
+		module.__vapehbeisplayer = isplayer
+
+		if module.__vapehbewrapped then return end
+		module.__vapehbewrapped = true
+
+		module.Create = function(config, ...)
+			local value
+
+			if module.__vapehbeallenabled then
+				value = module.__vapehbeallsize
+			elseif module.__vapehbeisplayer then
+				if module.__vapehbeplayerenabled then
+					value = module.__vapehbeplayersize
+				end
+			elseif module.__vapehbeballenabled then
+				value = module.__vapehbeballsize
+			end
+
+			if value then
+				config = setsize(config, value)
+			end
+
+			return module.__vapehbeoriginal(config, ...)
+		end
+	end
+
+	local function update()
+		handler = handler or gethandler('HitboxHandlerPlayers')
+		if not handler then return end
+
+		wrap(handler, true)
+		handler.__vapehbeplayerenabled = physicalreach.Enabled
+		handler.__vapehbeplayersize = size
+	end
+
+	physicalreach = vape.Categories.Blatant:CreateModule({
+		Name = 'PhysicalReach',
+		Function = function(callback)
+			update()
+			if not callback and handler then
+				handler.__vapehbeplayerenabled = false
+			end
+		end,
+		Tooltip = 'Expands player hitboxes'
+	})
+
+	slider = physicalreach:CreateSlider({
+		Name = 'Player hitbox size',
+		Min = 1,
+		Max = 35,
+		Default = 13.5,
+		Decimal = 10,
+		Function = function(val)
+			size = val
+			if handler then
+				handler.__vapehbeplayersize = val
+			end
+		end,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+
+	physicalreach:Clean(function()
+		if handler then
+			handler.__vapehbeplayerenabled = false
+		end
+	end)
+end)
+
+run(function()
+	local replicatedstorage = game:GetService('ReplicatedStorage')
+	local allhbe
+	local slider
+	local ballhandler
+	local playerhandler
+	local size = 13.5
+
+	local function gethandler(name)
+		local modules = replicatedstorage:FindFirstChild('Modules')
+		local obj = modules and modules:FindFirstChild(name, true) or replicatedstorage:FindFirstChild(name, true)
+		if not obj then return end
+
+		local suc, res = pcall(function()
+			return require(obj)
+		end)
+
+		return suc and type(res) == 'table' and res or nil
+	end
+
+	local function copyconfig(config)
+		local newconfig = {}
+		for i, v in pairs(config) do
+			newconfig[i] = v
+		end
+		return newconfig
+	end
+
+	local function setsize(config, value)
+		if type(config) ~= 'table' or config.size == nil then
+			return config
+		end
+
+		local newconfig = copyconfig(config)
+
+		if typeof(newconfig.size) == 'Vector3' then
+			newconfig.size = Vector3.new(value, value, value)
+		else
+			newconfig.size = value
+		end
+
+		return newconfig
+	end
+
+	local function wrap(module, isplayer)
+		if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
+
+		if not module.__vapehbeoriginal then
+			module.__vapehbeoriginal = module.Create
+		end
+
+		module.__vapehbeisplayer = isplayer
+
+		if module.__vapehbewrapped then return end
+		module.__vapehbewrapped = true
+
+		module.Create = function(config, ...)
+			local value
+
+			if module.__vapehbeallenabled then
+				value = module.__vapehbeallsize
+			elseif module.__vapehbeisplayer then
+				if module.__vapehbeplayerenabled then
+					value = module.__vapehbeplayersize
+				end
+			elseif module.__vapehbeballenabled then
+				value = module.__vapehbeballsize
+			end
+
+			if value then
+				config = setsize(config, value)
+			end
+
+			return module.__vapehbeoriginal(config, ...)
+		end
+	end
+
+	local function update()
+		ballhandler = ballhandler or gethandler('HitboxHandler')
+		playerhandler = playerhandler or gethandler('HitboxHandlerPlayers')
+
+		if ballhandler then
+			wrap(ballhandler, false)
+			ballhandler.__vapehbeallenabled = allhbe.Enabled
+			ballhandler.__vapehbeallsize = size
+		end
+
+		if playerhandler then
+			wrap(playerhandler, true)
+			playerhandler.__vapehbeallenabled = allhbe.Enabled
+			playerhandler.__vapehbeallsize = size
+		end
+	end
+
+	allhbe = vape.Categories.Blatant:CreateModule({
 		Name = 'ALLHBE',
 		Function = function(callback)
-			if callback then
-				                                                
-				setupRequireHook()
-				patchExistingModules()
-			else
-				                   
-				cleanup()
+			update()
+			if not callback then
+				if ballhandler then
+					ballhandler.__vapehbeallenabled = false
+				end
+				if playerhandler then
+					playerhandler.__vapehbeallenabled = false
+				end
 			end
 		end,
 		Tooltip = 'Expands hitbox size for easier hits'
 	})
 
-	                                                   
-	SizeSlider = ALLHBE:CreateSlider({
+	slider = allhbe:CreateSlider({
 		Name = 'Hitbox size',
 		Min = 1,
 		Max = 35,
 		Default = 13.5,
 		Decimal = 10,
 		Function = function(val)
-			multiplier = val / 10
+			size = val
+			if ballhandler then
+				ballhandler.__vapehbeallsize = val
+			end
+			if playerhandler then
+				playerhandler.__vapehbeallsize = val
+			end
 		end,
 		Suffix = function(val)
-			return string.format('%.2fx', val / 10)
+			return val == 1 and 'stud' or 'studs'
 		end
 	})
-end)                                       
 
+	allhbe:Clean(function()
+		if ballhandler then
+			ballhandler.__vapehbeallenabled = false
+		end
+		if playerhandler then
+			playerhandler.__vapehbeallenabled = false
+		end
+	end)
+end)
+																																								
 run(function()
     local HighJump
     local CategoryDropdown
