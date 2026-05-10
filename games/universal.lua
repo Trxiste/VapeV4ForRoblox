@@ -2458,13 +2458,13 @@ run(function()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
     end)
 end)
-                                  
+
 run(function()
 	local replicatedstorage = game:GetService('ReplicatedStorage')
 	local hitboxextender
 	local slider
 	local handler
-	local size = 13.5
+	local multiplier = 1
 
 	local function gethandler(name)
 		local modules = replicatedstorage:FindFirstChild('Modules')
@@ -2486,7 +2486,7 @@ run(function()
 		return newconfig
 	end
 
-	local function setsize(config, value)
+	local function multiplysize(config, value)
 		if type(config) ~= 'table' or config.size == nil then
 			return config
 		end
@@ -2494,9 +2494,9 @@ run(function()
 		local newconfig = copyconfig(config)
 
 		if typeof(newconfig.size) == 'Vector3' then
-			newconfig.size = Vector3.new(value, value, value)
-		else
-			newconfig.size = value
+			newconfig.size = newconfig.size * value
+		elseif type(newconfig.size) == 'number' then
+			newconfig.size = newconfig.size * value
 		end
 
 		return newconfig
@@ -2518,17 +2518,17 @@ run(function()
 			local value
 
 			if module.__vapehbeallenabled then
-				value = module.__vapehbeallsize
+				value = module.__vapehbeallmultiplier
 			elseif module.__vapehbeisplayer then
 				if module.__vapehbeplayerenabled then
-					value = module.__vapehbeplayersize
+					value = module.__vapehbeplayermultiplier
 				end
 			elseif module.__vapehbeballenabled then
-				value = module.__vapehbeballsize
+				value = module.__vapehbeballmultiplier
 			end
 
-			if value then
-				config = setsize(config, value)
+			if value and value ~= 1 then
+				config = multiplysize(config, value)
 			end
 
 			return module.__vapehbeoriginal(config, ...)
@@ -2541,7 +2541,7 @@ run(function()
 
 		wrap(handler, false)
 		handler.__vapehbeballenabled = hitboxextender.Enabled
-		handler.__vapehbeballsize = size
+		handler.__vapehbeballmultiplier = multiplier
 	end
 
 	hitboxextender = vape.Categories.Blatant:CreateModule({
@@ -2556,19 +2556,19 @@ run(function()
 	})
 
 	slider = hitboxextender:CreateSlider({
-		Name = 'Ball hitbox size',
+		Name = 'Multiplier',
 		Min = 1,
-		Max = 35,
-		Default = 13.5,
+		Max = 5,
+		Default = 1,
 		Decimal = 10,
 		Function = function(val)
-			size = val
+			multiplier = val
 			if handler then
-				handler.__vapehbeballsize = val
+				handler.__vapehbeballmultiplier = val
 			end
 		end,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
+		Suffix = function()
+			return 'x'
 		end
 	})
 
@@ -2584,7 +2584,7 @@ run(function()
 	local physicalreach
 	local slider
 	local handler
-	local size = 13.5
+	local multiplier = 1
 
 	local function gethandler(name)
 		local modules = replicatedstorage:FindFirstChild('Modules')
@@ -2606,7 +2606,7 @@ run(function()
 		return newconfig
 	end
 
-	local function setsize(config, value)
+	local function multiplysize(config, value)
 		if type(config) ~= 'table' or config.size == nil then
 			return config
 		end
@@ -2614,9 +2614,9 @@ run(function()
 		local newconfig = copyconfig(config)
 
 		if typeof(newconfig.size) == 'Vector3' then
-			newconfig.size = Vector3.new(value, value, value)
-		else
-			newconfig.size = value
+			newconfig.size = newconfig.size * value
+		elseif type(newconfig.size) == 'number' then
+			newconfig.size = newconfig.size * value
 		end
 
 		return newconfig
@@ -2638,17 +2638,17 @@ run(function()
 			local value
 
 			if module.__vapehbeallenabled then
-				value = module.__vapehbeallsize
+				value = module.__vapehbeallmultiplier
 			elseif module.__vapehbeisplayer then
 				if module.__vapehbeplayerenabled then
-					value = module.__vapehbeplayersize
+					value = module.__vapehbeplayermultiplier
 				end
 			elseif module.__vapehbeballenabled then
-				value = module.__vapehbeballsize
+				value = module.__vapehbeballmultiplier
 			end
 
-			if value then
-				config = setsize(config, value)
+			if value and value ~= 1 then
+				config = multiplysize(config, value)
 			end
 
 			return module.__vapehbeoriginal(config, ...)
@@ -2661,7 +2661,7 @@ run(function()
 
 		wrap(handler, true)
 		handler.__vapehbeplayerenabled = physicalreach.Enabled
-		handler.__vapehbeplayersize = size
+		handler.__vapehbeplayermultiplier = multiplier
 	end
 
 	physicalreach = vape.Categories.Blatant:CreateModule({
@@ -2676,19 +2676,19 @@ run(function()
 	})
 
 	slider = physicalreach:CreateSlider({
-		Name = 'Player hitbox size',
+		Name = 'Multiplier',
 		Min = 1,
-		Max = 35,
-		Default = 13.5,
+		Max = 5,
+		Default = 1,
 		Decimal = 10,
 		Function = function(val)
-			size = val
+			multiplier = val
 			if handler then
-				handler.__vapehbeplayersize = val
+				handler.__vapehbeplayermultiplier = val
 			end
 		end,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
+		Suffix = function()
+			return 'x'
 		end
 	})
 
@@ -2705,7 +2705,7 @@ run(function()
 	local slider
 	local ballhandler
 	local playerhandler
-	local size = 13.5
+	local multiplier = 1
 
 	local function gethandler(name)
 		local modules = replicatedstorage:FindFirstChild('Modules')
@@ -2727,7 +2727,7 @@ run(function()
 		return newconfig
 	end
 
-	local function setsize(config, value)
+	local function multiplysize(config, value)
 		if type(config) ~= 'table' or config.size == nil then
 			return config
 		end
@@ -2735,9 +2735,9 @@ run(function()
 		local newconfig = copyconfig(config)
 
 		if typeof(newconfig.size) == 'Vector3' then
-			newconfig.size = Vector3.new(value, value, value)
-		else
-			newconfig.size = value
+			newconfig.size = newconfig.size * value
+		elseif type(newconfig.size) == 'number' then
+			newconfig.size = newconfig.size * value
 		end
 
 		return newconfig
@@ -2759,17 +2759,17 @@ run(function()
 			local value
 
 			if module.__vapehbeallenabled then
-				value = module.__vapehbeallsize
+				value = module.__vapehbeallmultiplier
 			elseif module.__vapehbeisplayer then
 				if module.__vapehbeplayerenabled then
-					value = module.__vapehbeplayersize
+					value = module.__vapehbeplayermultiplier
 				end
 			elseif module.__vapehbeballenabled then
-				value = module.__vapehbeballsize
+				value = module.__vapehbeballmultiplier
 			end
 
-			if value then
-				config = setsize(config, value)
+			if value and value ~= 1 then
+				config = multiplysize(config, value)
 			end
 
 			return module.__vapehbeoriginal(config, ...)
@@ -2783,13 +2783,13 @@ run(function()
 		if ballhandler then
 			wrap(ballhandler, false)
 			ballhandler.__vapehbeallenabled = allhbe.Enabled
-			ballhandler.__vapehbeallsize = size
+			ballhandler.__vapehbeallmultiplier = multiplier
 		end
 
 		if playerhandler then
 			wrap(playerhandler, true)
 			playerhandler.__vapehbeallenabled = allhbe.Enabled
-			playerhandler.__vapehbeallsize = size
+			playerhandler.__vapehbeallmultiplier = multiplier
 		end
 	end
 
@@ -2810,22 +2810,22 @@ run(function()
 	})
 
 	slider = allhbe:CreateSlider({
-		Name = 'Hitbox size',
+		Name = 'Multiplier',
 		Min = 1,
-		Max = 35,
-		Default = 13.5,
+		Max = 5,
+		Default = 1,
 		Decimal = 10,
 		Function = function(val)
-			size = val
+			multiplier = val
 			if ballhandler then
-				ballhandler.__vapehbeallsize = val
+				ballhandler.__vapehbeallmultiplier = val
 			end
 			if playerhandler then
-				playerhandler.__vapehbeallsize = val
+				playerhandler.__vapehbeallmultiplier = val
 			end
 		end,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
+		Suffix = function()
+			return 'x'
 		end
 	})
 
@@ -2837,7 +2837,7 @@ run(function()
 			playerhandler.__vapehbeallenabled = false
 		end
 	end)
-end)
+end)																																								
 																																								
 run(function()
     local HighJump
