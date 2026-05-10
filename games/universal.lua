@@ -2460,384 +2460,209 @@ run(function()
 end)
 
 run(function()
+	shared.vapehbe = shared.vapehbe or {
+		wrapped = {},
+		state = {
+			ball = false,
+			player = false,
+			all = false,
+			ballmultiplier = 1.35,
+			playermultiplier = 1.35,
+			allmultiplier = 1.35
+		}
+	}
+
 	local replicatedstorage = game:GetService('ReplicatedStorage')
-	local hitboxextender
-	local slider
-	local handler
-	local multiplier = 1
+	local hbe = shared.vapehbe
 
-	local function gethandler(name)
-		local modules = replicatedstorage:FindFirstChild('Modules')
-		local obj = modules and modules:FindFirstChild(name, true) or replicatedstorage:FindFirstChild(name, true)
-		if not obj then return end
+	local function gettarget(module)
+		if typeof(module) ~= 'Instance' then return end
+		if not module:IsA('ModuleScript') then return end
 
-		local suc, res = pcall(function()
-			return require(obj)
-		end)
+		local name = module.Name
+		local fullname = module:GetFullName()
 
-		return suc and type(res) == 'table' and res or nil
-	end
-
-	local function copyconfig(config)
-		local newconfig = {}
-		for i, v in pairs(config) do
-			newconfig[i] = v
-		end
-		return newconfig
-	end
-
-	local function multiplysize(config, value)
-		if type(config) ~= 'table' or config.size == nil then
-			return config
+		if name == 'HitboxHandlerPlayers' or fullname:find('HitboxHandlerPlayers') then
+			return 'player'
 		end
 
-		local newconfig = copyconfig(config)
-
-		if typeof(newconfig.size) == 'Vector3' then
-			newconfig.size = newconfig.size * value
-		elseif type(newconfig.size) == 'number' then
-			newconfig.size = newconfig.size * value
+		if name == 'HitboxHandler' or fullname:find('HitboxHandler') then
+			return 'ball'
 		end
-
-		return newconfig
 	end
 
-	local function wrap(module, isplayer)
+	local function getmultiplier(target)
+		if hbe.state.all then
+			return hbe.state.allmultiplier
+		end
+
+		if target == 'player' then
+			return hbe.state.player and hbe.state.playermultiplier or nil
+		end
+
+		return hbe.state.ball and hbe.state.ballmultiplier or nil
+	end
+
+	local function patchmodule(module, target)
 		if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
+		if hbe.wrapped[module] then return end
 
-		if not module.__vapehbeoriginal then
-			module.__vapehbeoriginal = module.Create
-		end
-
-		module.__vapehbeisplayer = isplayer
-
-		if module.__vapehbewrapped then return end
-		module.__vapehbewrapped = true
+		local original = module.Create
+		hbe.wrapped[module] = original
 
 		module.Create = function(config, ...)
-			local value
+			local multiplier = getmultiplier(target)
 
-			if module.__vapehbeallenabled then
-				value = module.__vapehbeallmultiplier
-			elseif module.__vapehbeisplayer then
-				if module.__vapehbeplayerenabled then
-					value = module.__vapehbeplayermultiplier
-				end
-			elseif module.__vapehbeballenabled then
-				value = module.__vapehbeballmultiplier
+			if multiplier and type(config) == 'table' and config.size then
+				config.size = config.size * multiplier
 			end
 
-			if value and value ~= 1 then
-				config = multiplysize(config, value)
-			end
-
-			return module.__vapehbeoriginal(config, ...)
+			return original(config, ...)
 		end
 	end
 
-	local function update()
-		handler = handler or gethandler('HitboxHandler')
-		if not handler then return end
+	local function scan()
+		for _, module in replicatedstorage:GetDescendants() do
+			local target = gettarget(module)
 
-		wrap(handler, false)
-		handler.__vapehbeballenabled = hitboxextender.Enabled
-		handler.__vapehbeballmultiplier = multiplier
+			if target then
+				local suc, result = pcall(function()
+					return require(module)
+				end)
+
+				if suc then
+					patchmodule(result, target)
+				end
+			end
+		end
 	end
 
-	hitboxextender = vape.Categories.Blatant:CreateModule({
+	if not hbe.requirehooked then
+		hbe.requirehooked = true
+		hbe.oldrequire = require
+
+		require = function(module)
+			local result = hbe.oldrequire(module)
+			local target = gettarget(module)
+
+			if target then
+				patchmodule(result, target)
+			end
+
+			return result
+		end
+	end
+
+	hbe.scan = scan
+end)
+
+run(function()
+	local HitboxExtender
+	local SizeSlider
+	local hbe = shared.vapehbe
+	local multiplier = 1.35
+
+	HitboxExtender = vape.Categories.Blatant:CreateModule({
 		Name = 'HitboxExtender',
 		Function = function(callback)
-			update()
-			if not callback and handler then
-				handler.__vapehbeballenabled = false
-			end
+			hbe.state.ball = callback
+			hbe.state.ballmultiplier = multiplier
+			hbe.scan()
 		end,
 		Tooltip = 'Expands ball hitbox'
 	})
 
-	slider = hitboxextender:CreateSlider({
+	SizeSlider = HitboxExtender:CreateSlider({
 		Name = 'Multiplier',
 		Min = 1,
-		Max = 5,
-		Default = 1,
+		Max = 35,
+		Default = 13.5,
 		Decimal = 10,
 		Function = function(val)
-			multiplier = val
-			if handler then
-				handler.__vapehbeballmultiplier = val
-			end
+			multiplier = val / 10
+			hbe.state.ballmultiplier = multiplier
 		end,
-		Suffix = function()
-			return 'x'
+		Suffix = function(val)
+			return string.format('%.2fx', val / 10)
 		end
 	})
 
-	hitboxextender:Clean(function()
-		if handler then
-			handler.__vapehbeballenabled = false
-		end
+	HitboxExtender:Clean(function()
+		hbe.state.ball = false
 	end)
 end)
 
 run(function()
-	local replicatedstorage = game:GetService('ReplicatedStorage')
-	local physicalreach
-	local slider
-	local handler
-	local multiplier = 1
+	local PhysicalReach
+	local SizeSlider
+	local hbe = shared.vapehbe
+	local multiplier = 1.35
 
-	local function gethandler(name)
-		local modules = replicatedstorage:FindFirstChild('Modules')
-		local obj = modules and modules:FindFirstChild(name, true) or replicatedstorage:FindFirstChild(name, true)
-		if not obj then return end
-
-		local suc, res = pcall(function()
-			return require(obj)
-		end)
-
-		return suc and type(res) == 'table' and res or nil
-	end
-
-	local function copyconfig(config)
-		local newconfig = {}
-		for i, v in pairs(config) do
-			newconfig[i] = v
-		end
-		return newconfig
-	end
-
-	local function multiplysize(config, value)
-		if type(config) ~= 'table' or config.size == nil then
-			return config
-		end
-
-		local newconfig = copyconfig(config)
-
-		if typeof(newconfig.size) == 'Vector3' then
-			newconfig.size = newconfig.size * value
-		elseif type(newconfig.size) == 'number' then
-			newconfig.size = newconfig.size * value
-		end
-
-		return newconfig
-	end
-
-	local function wrap(module, isplayer)
-		if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
-
-		if not module.__vapehbeoriginal then
-			module.__vapehbeoriginal = module.Create
-		end
-
-		module.__vapehbeisplayer = isplayer
-
-		if module.__vapehbewrapped then return end
-		module.__vapehbewrapped = true
-
-		module.Create = function(config, ...)
-			local value
-
-			if module.__vapehbeallenabled then
-				value = module.__vapehbeallmultiplier
-			elseif module.__vapehbeisplayer then
-				if module.__vapehbeplayerenabled then
-					value = module.__vapehbeplayermultiplier
-				end
-			elseif module.__vapehbeballenabled then
-				value = module.__vapehbeballmultiplier
-			end
-
-			if value and value ~= 1 then
-				config = multiplysize(config, value)
-			end
-
-			return module.__vapehbeoriginal(config, ...)
-		end
-	end
-
-	local function update()
-		handler = handler or gethandler('HitboxHandlerPlayers')
-		if not handler then return end
-
-		wrap(handler, true)
-		handler.__vapehbeplayerenabled = physicalreach.Enabled
-		handler.__vapehbeplayermultiplier = multiplier
-	end
-
-	physicalreach = vape.Categories.Blatant:CreateModule({
+	PhysicalReach = vape.Categories.Blatant:CreateModule({
 		Name = 'PhysicalReach',
 		Function = function(callback)
-			update()
-			if not callback and handler then
-				handler.__vapehbeplayerenabled = false
-			end
+			hbe.state.player = callback
+			hbe.state.playermultiplier = multiplier
+			hbe.scan()
 		end,
 		Tooltip = 'Expands player hitboxes'
 	})
 
-	slider = physicalreach:CreateSlider({
+	SizeSlider = PhysicalReach:CreateSlider({
 		Name = 'Multiplier',
 		Min = 1,
-		Max = 5,
-		Default = 1,
+		Max = 35,
+		Default = 13.5,
 		Decimal = 10,
 		Function = function(val)
-			multiplier = val
-			if handler then
-				handler.__vapehbeplayermultiplier = val
-			end
+			multiplier = val / 10
+			hbe.state.playermultiplier = multiplier
 		end,
-		Suffix = function()
-			return 'x'
+		Suffix = function(val)
+			return string.format('%.2fx', val / 10)
 		end
 	})
 
-	physicalreach:Clean(function()
-		if handler then
-			handler.__vapehbeplayerenabled = false
-		end
+	PhysicalReach:Clean(function()
+		hbe.state.player = false
 	end)
 end)
 
 run(function()
-	local replicatedstorage = game:GetService('ReplicatedStorage')
-	local allhbe
-	local slider
-	local ballhandler
-	local playerhandler
-	local multiplier = 1
+	local ALLHBE
+	local SizeSlider
+	local hbe = shared.vapehbe
+	local multiplier = 1.35
 
-	local function gethandler(name)
-		local modules = replicatedstorage:FindFirstChild('Modules')
-		local obj = modules and modules:FindFirstChild(name, true) or replicatedstorage:FindFirstChild(name, true)
-		if not obj then return end
-
-		local suc, res = pcall(function()
-			return require(obj)
-		end)
-
-		return suc and type(res) == 'table' and res or nil
-	end
-
-	local function copyconfig(config)
-		local newconfig = {}
-		for i, v in pairs(config) do
-			newconfig[i] = v
-		end
-		return newconfig
-	end
-
-	local function multiplysize(config, value)
-		if type(config) ~= 'table' or config.size == nil then
-			return config
-		end
-
-		local newconfig = copyconfig(config)
-
-		if typeof(newconfig.size) == 'Vector3' then
-			newconfig.size = newconfig.size * value
-		elseif type(newconfig.size) == 'number' then
-			newconfig.size = newconfig.size * value
-		end
-
-		return newconfig
-	end
-
-	local function wrap(module, isplayer)
-		if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
-
-		if not module.__vapehbeoriginal then
-			module.__vapehbeoriginal = module.Create
-		end
-
-		module.__vapehbeisplayer = isplayer
-
-		if module.__vapehbewrapped then return end
-		module.__vapehbewrapped = true
-
-		module.Create = function(config, ...)
-			local value
-
-			if module.__vapehbeallenabled then
-				value = module.__vapehbeallmultiplier
-			elseif module.__vapehbeisplayer then
-				if module.__vapehbeplayerenabled then
-					value = module.__vapehbeplayermultiplier
-				end
-			elseif module.__vapehbeballenabled then
-				value = module.__vapehbeballmultiplier
-			end
-
-			if value and value ~= 1 then
-				config = multiplysize(config, value)
-			end
-
-			return module.__vapehbeoriginal(config, ...)
-		end
-	end
-
-	local function update()
-		ballhandler = ballhandler or gethandler('HitboxHandler')
-		playerhandler = playerhandler or gethandler('HitboxHandlerPlayers')
-
-		if ballhandler then
-			wrap(ballhandler, false)
-			ballhandler.__vapehbeallenabled = allhbe.Enabled
-			ballhandler.__vapehbeallmultiplier = multiplier
-		end
-
-		if playerhandler then
-			wrap(playerhandler, true)
-			playerhandler.__vapehbeallenabled = allhbe.Enabled
-			playerhandler.__vapehbeallmultiplier = multiplier
-		end
-	end
-
-	allhbe = vape.Categories.Blatant:CreateModule({
+	ALLHBE = vape.Categories.Blatant:CreateModule({
 		Name = 'ALLHBE',
 		Function = function(callback)
-			update()
-			if not callback then
-				if ballhandler then
-					ballhandler.__vapehbeallenabled = false
-				end
-				if playerhandler then
-					playerhandler.__vapehbeallenabled = false
-				end
-			end
+			hbe.state.all = callback
+			hbe.state.allmultiplier = multiplier
+			hbe.scan()
 		end,
 		Tooltip = 'Expands hitbox size for easier hits'
 	})
 
-	slider = allhbe:CreateSlider({
+	SizeSlider = ALLHBE:CreateSlider({
 		Name = 'Multiplier',
 		Min = 1,
-		Max = 5,
-		Default = 1,
+		Max = 35,
+		Default = 13.5,
 		Decimal = 10,
 		Function = function(val)
-			multiplier = val
-			if ballhandler then
-				ballhandler.__vapehbeallmultiplier = val
-			end
-			if playerhandler then
-				playerhandler.__vapehbeallmultiplier = val
-			end
+			multiplier = val / 10
+			hbe.state.allmultiplier = multiplier
 		end,
-		Suffix = function()
-			return 'x'
+		Suffix = function(val)
+			return string.format('%.2fx', val / 10)
 		end
 	})
 
-	allhbe:Clean(function()
-		if ballhandler then
-			ballhandler.__vapehbeallenabled = false
-		end
-		if playerhandler then
-			playerhandler.__vapehbeallenabled = false
-		end
+	ALLHBE:Clean(function()
+		hbe.state.all = false
 	end)
-end)																																								
+end)
 																																								
 run(function()
     local HighJump
