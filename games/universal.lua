@@ -4047,1291 +4047,372 @@ run(function()
     })
 end)
 
-
 run(function()
-    local Trajectories
-
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local Workspace = game:GetService("Workspace")
-
-    local lplr = Players.LocalPlayer
-
-    local function getVape()
-        local ok, env = pcall(function()
-            return getgenv()
-        end)
-
-        if ok and env and env.vape then
-            return env.vape
-        end
-
-        if shared and shared.vape then
-            return shared.vape
-        end
-
-        if vape then
-            return vape
-        end
-
-        return nil
-    end
-
-    local vapeLib = getVape()
-
-    if not vapeLib or not vapeLib.Categories then
-        return
-    end
-
-    local Enabled = false
-    local RenderConnection
-
-    local VisualFolder
-    local Dots = {}
-    local LandingDot
-    local ProfileLabel
-
-    local LastClock
-    local LastPos
-    local LastVel
-    local LastCalculatedVel
-    local LastUpdate = 0
-
-    local ShotState = {
-        Active = false,
-        Pending = false,
-        PendingStarted = 0,
-        Samples = {},
-        Profile = nil,
-        ProfileName = "Idle",
-        LockedUntil = 0,
-        StartedAt = 0,
-        LastBounceTime = 0,
-        BounceCount = 0,
-        PeakSpeed = 0,
-        Confidence = 0
-    }
-
-    local LiveState = {
-        SmoothAccel = Vector3.zero,
-        SmoothDrag = 0.15,
-        SmoothMagnus = 0.0076,
-        SmoothGroundFriction = 1.2,
-        HasAccel = false
-    }
-
-    local Settings = {
-        PredictionTime = 3.35,
-        PointCount = 115,
-        UpdateRate = 72,
-
-        DotSize = 0.16,
-        LandingDotSize = 0.48,
-
-        ShowLanding = true,
-        ShowBounces = true,
-        ShowProfileLabel = true,
-
-        UseLiveCorrection = true,
-        UseSpherecast = true,
-        UseGroundRoll = true,
-
-        MinShotSpeed = 14,
-        StopSpeed = 1.25,
-
-        ShotLockSeconds = 0.42,
-        InitialDecisionWindow = 0.045,
-
-        MaxReasonableSpeed = 190,
-        MaxAccelSample = 850,
-
-        DefaultGravityScale = 0.848,
-        DefaultAirDrag = 0.15,
-        DefaultMagnus = 0.0076,
-        DefaultGroundFriction = 1.21,
-
-        HorizonGuard = true,
-        MaxFlatFlightSeconds = 1.15,
-
-        BounceSkin = 0.045,
-        MaxBounces = 0,}
-
-                                                              
-                                                                                                    
-    local Profiles = {
-        Idle = {
-            Name = "Idle",
-            GravityScale = 0.848,
-            AirDrag = 0.15,
-            Magnus = 0.0076,
-            GroundFriction = 1.21,
-            Bounce = 0.22,
-            FirstBounce = 0.18,
-            TangentDamping = 0.78,
-            Downforce = 0,
-            HorizonDownBias = 1.0
-        },
-
-        SoftTap = {
-            Name = "SoftTap",
-            GravityScale = 0.89,
-            AirDrag = 0.22,
-            Magnus = 0.004,
-            GroundFriction = 1.55,
-            Bounce = 0.13,
-            FirstBounce = 0.09,
-            TangentDamping = 0.72,
-            Downforce = 0,
-            HorizonDownBias = 1.35
-        },
-
-        GroundPass = {
-            Name = "GroundPass",
-            GravityScale = 0.92,
-            AirDrag = 0.19,
-            Magnus = 0.004,
-            GroundFriction = 1.28,
-            Bounce = 0.16,
-            FirstBounce = 0.11,
-            TangentDamping = 0.76,
-            Downforce = 0,
-            HorizonDownBias = 1.45
-        },
-
-        GroundPower = {
-            Name = "GroundPower",
-            GravityScale = 0.94,
-            AirDrag = 0.16,
-            Magnus = 0.0045,
-            GroundFriction = 1.05,
-            Bounce = 0.18,
-            FirstBounce = 0.13,
-            TangentDamping = 0.81,
-            Downforce = 0,
-            HorizonDownBias = 1.55
-        },
-
-        PowerMiddle = {
-            Name = "PowerMiddle",
-            GravityScale = 0.848,
-            AirDrag = 0.125,
-            Magnus = 0.006,
-            GroundFriction = 1.05,
-            Bounce = 0.31,
-            FirstBounce = 0.26,
-            TangentDamping = 0.84,
-            Downforce = 0,
-            HorizonDownBias = 1.0
-        },
-
-        PowerUp = {
-            Name = "PowerUp",
-            GravityScale = 0.84,
-            AirDrag = 0.135,
-            Magnus = 0.006,
-            GroundFriction = 1.08,
-            Bounce = 0.34,
-            FirstBounce = 0.29,
-            TangentDamping = 0.84,
-            Downforce = 0,
-            HorizonDownBias = 0.95
-        },
-
-        Chip = {
-            Name = "Chip",
-            GravityScale = 0.87,
-            AirDrag = 0.14,
-            Magnus = 0.004,
-            GroundFriction = 1.12,
-            Bounce = 0.29,
-            FirstBounce = 0.25,
-            TangentDamping = 0.79,
-            Downforce = 0,
-            HorizonDownBias = 0.95
-        },
-
-        HighChip = {
-            Name = "HighChip",
-            GravityScale = 0.86,
-            AirDrag = 0.145,
-            Magnus = 0.004,
-            GroundFriction = 1.14,
-            Bounce = 0.32,
-            FirstBounce = 0.28,
-            TangentDamping = 0.78,
-            Downforce = 0,
-            HorizonDownBias = 0.9
-        },
-
-        TopspinLow = {
-            Name = "TopspinLow",
-            GravityScale = 0.91,
-            AirDrag = 0.13,
-            Magnus = 0.0105,
-            GroundFriction = 1.1,
-            Bounce = 0.22,
-            FirstBounce = 0.17,
-            TangentDamping = 0.82,
-            Downforce = 12,
-            HorizonDownBias = 1.35
-        },
-
-        TopspinHigh = {
-            Name = "TopspinHigh",
-            GravityScale = 0.9,
-            AirDrag = 0.13,
-            Magnus = 0.0115,
-            GroundFriction = 1.12,
-            Bounce = 0.27,
-            FirstBounce = 0.22,
-            TangentDamping = 0.8,
-            Downforce = 18,
-            HorizonDownBias = 1.25
-        },
-
-        CurveLowRight = {
-            Name = "CurveLowRight",
-            GravityScale = 0.86,
-            AirDrag = 0.13,
-            Magnus = 0.0125,
-            GroundFriction = 1.08,
-            Bounce = 0.25,
-            FirstBounce = 0.2,
-            TangentDamping = 0.82,
-            Downforce = 4,
-            HorizonDownBias = 1.15
-        },
-
-        CurveHighRight = {
-            Name = "CurveHighRight",
-            GravityScale = 0.85,
-            AirDrag = 0.135,
-            Magnus = 0.0135,
-            GroundFriction = 1.1,
-            Bounce = 0.3,
-            FirstBounce = 0.25,
-            TangentDamping = 0.8,
-            Downforce = 8,
-            HorizonDownBias = 1.0
-        },
-
-        Dribble = {
-            Name = "Dribble",
-            GravityScale = 0.96,
-            AirDrag = 0.22,
-            Magnus = 0.0035,
-            GroundFriction = 1.45,
-            Bounce = 0.11,
-            FirstBounce = 0.08,
-            TangentDamping = 0.7,
-            Downforce = 0,
-            HorizonDownBias = 1.6
-        }
-    }
-
-    local MaterialResponse = {
-        [Enum.Material.Grass] = {
-            BounceMul = 0.72,
-            TangentMul = 0.76,
-            GroundFrictionMul = 1.25
-        },
-
-        [Enum.Material.Ground] = {
-            BounceMul = 0.7,
-            TangentMul = 0.74,
-            GroundFrictionMul = 1.3
-        },
-
-        [Enum.Material.Concrete] = {
-            BounceMul = 1.0,
-            TangentMul = 0.88,
-            GroundFrictionMul = 0.95
-        },
-
-        [Enum.Material.Asphalt] = {
-            BounceMul = 0.92,
-            TangentMul = 0.84,
-            GroundFrictionMul = 1.0
-        },
-
-        [Enum.Material.SmoothPlastic] = {
-            BounceMul = 0.95,
-            TangentMul = 0.86,
-            GroundFrictionMul = 0.9
-        },
-
-        [Enum.Material.Plastic] = {
-            BounceMul = 0.9,
-            TangentMul = 0.84,
-            GroundFrictionMul = 1.0
-        }
-    }
-
-    local function clamp(n, min, max)
-        if n < min then
-            return min
-        end
-
-        if n > max then
-            return max
-        end
-
-        return n
-    end
-
-    local function lerp(a, b, t)
-        return a + (b - a) * t
-    end
-
-    local function safeVector(v)
-        if typeof(v) ~= "Vector3" then
-            return Vector3.zero
-        end
-
-        if v.X ~= v.X or v.Y ~= v.Y or v.Z ~= v.Z then
-            return Vector3.zero
-        end
-
-        return v
-    end
-
-    local function getCategory()
-        return vapeLib.Categories.Render
-            or vapeLib.Categories.Utility
-            or vapeLib.Categories.World
-            or vapeLib.Categories.Blatant
-    end
-
-    local function getBallObject()
-        local temp = Workspace:FindFirstChild("Temp")
-        if not temp then
-            return nil
-        end
-
-        return temp:FindFirstChild("Ball")
-    end
-
-    local function getBallPart()
-        local ball = getBallObject()
-        if not ball then
-            return nil
-        end
-
-        if ball:IsA("BasePart") then
-            return ball
-        end
-
-        if ball:IsA("Model") then
-            if ball.PrimaryPart then
-                return ball.PrimaryPart
-            end
-
-            return ball:FindFirstChildWhichIsA("BasePart", true)
-        end
-
-        return ball:FindFirstChildWhichIsA("BasePart", true)
-    end
-
-    local function getBallRadius(ballPart)
-        if not ballPart then
-            return 1
-        end
-
-        local s = ballPart.Size
-        return math.max(s.X, s.Y, s.Z) * 0.5
-    end
-
-    local function ensureFolder()
-        if VisualFolder and VisualFolder.Parent then
-            return VisualFolder
-        end
-
-        VisualFolder = Instance.new("Folder")
-        VisualFolder.Name = "VapeV4_DeveloperBallTrajectories"
-        VisualFolder.Parent = Workspace
-
-        return VisualFolder
-    end
-
-    local function getRayParams(ballPart)
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.IgnoreWater = false
-
-        local ignore = {}
-
-        local ballObject = getBallObject()
-        if ballObject then
-            table.insert(ignore, ballObject)
-        end
-
-        if ballPart then
-            table.insert(ignore, ballPart)
-        end
-
-        if VisualFolder then
-            table.insert(ignore, VisualFolder)
-        end
-
-        if lplr and lplr.Character then
-            table.insert(ignore, lplr.Character)
-        end
-
-        params.FilterDescendantsInstances = ignore
-
-        return params
-    end
-
-    local function castBall(ballPart, origin, direction)
-        local params = getRayParams(ballPart)
-        local radius = getBallRadius(ballPart)
-
-        if Settings.UseSpherecast and Workspace.Spherecast then
-            local ok, result = pcall(function()
-                return Workspace:Spherecast(origin, radius * 0.92, direction, params)
-            end)
-
-            if ok and result then
-                return result
-            end
-        end
-
-        return Workspace:Raycast(origin, direction, params)
-    end
-
-    local function isNearGround(ballPart, pos)
-        local radius = getBallRadius(ballPart)
-        local result = castBall(ballPart, pos, Vector3.new(0, -(radius + 0.42), 0))
-
-        if result then
-            return true, result
-        end
-
-        return false, nil
-    end
-
-    local function createDot(index)
-        local dot = Instance.new("Part")
-        dot.Name = "TrajectoriesDot_" .. tostring(index)
-        dot.Shape = Enum.PartType.Ball
-        dot.Anchored = true
-        dot.CanCollide = false
-        dot.CanTouch = false
-        dot.CanQuery = false
-        dot.CastShadow = false
-        dot.Material = Enum.Material.Neon
-        dot.Size = Vector3.new(Settings.DotSize, Settings.DotSize, Settings.DotSize)
-        dot.Transparency = 1
-        dot.Color = Color3.fromRGB(75, 190, 255)
-        dot.Parent = ensureFolder()
-
-        return dot
-    end
-
-    local function getDot(index)
-        if not Dots[index] or not Dots[index].Parent then
-            Dots[index] = createDot(index)
-        end
-
-        return Dots[index]
-    end
-
-    local function getLandingDot()
-        if LandingDot and LandingDot.Parent then
-            return LandingDot
-        end
-
-        LandingDot = Instance.new("Part")
-        LandingDot.Name = "TrajectoriesLandingDot"
-        LandingDot.Shape = Enum.PartType.Ball
-        LandingDot.Anchored = true
-        LandingDot.CanCollide = false
-        LandingDot.CanTouch = false
-        LandingDot.CanQuery = false
-        LandingDot.CastShadow = false
-        LandingDot.Material = Enum.Material.Neon
-        LandingDot.Size = Vector3.new(Settings.LandingDotSize, Settings.LandingDotSize, Settings.LandingDotSize)
-        LandingDot.Transparency = 1
-        LandingDot.Color = Color3.fromRGB(255, 85, 85)
-        LandingDot.Parent = ensureFolder()
-
-        return LandingDot
-    end
-
-    local function hideVisuals()
-        for _, dot in pairs(Dots) do
-            if dot then
-                dot.Transparency = 1
-            end
-        end
-
-        if LandingDot then
-            LandingDot.Transparency = 1
-        end
-    end
-
-    local function clearVisuals()
-        if RenderConnection then
-            RenderConnection:Disconnect()
-            RenderConnection = nil
-        end
-
-        if VisualFolder then
-            VisualFolder:Destroy()
-            VisualFolder = nil
-        end
-
-        Dots = {}
-        LandingDot = nil
-        ProfileLabel = nil
-
-        LastClock = nil
-        LastPos = nil
-        LastVel = nil
-        LastCalculatedVel = nil
-
-        ShotState.Active = false
-        ShotState.Pending = false
-        ShotState.Samples = {}
-        ShotState.Profile = nil
-        ShotState.ProfileName = "Idle"
-        ShotState.LockedUntil = 0
-        ShotState.StartedAt = 0
-        ShotState.LastBounceTime = 0
-        ShotState.BounceCount = 0
-        ShotState.PeakSpeed = 0
-        ShotState.Confidence = 0
-
-        LiveState.SmoothAccel = Vector3.zero
-        LiveState.SmoothDrag = Settings.DefaultAirDrag
-        LiveState.SmoothMagnus = Settings.DefaultMagnus
-        LiveState.SmoothGroundFriction = Settings.DefaultGroundFriction
-        LiveState.HasAccel = false
-    end
-
-    local function medianNumber(list)
-        table.sort(list)
-
-        local n = #list
-        if n == 0 then
-            return 0
-        end
-
-        if n % 2 == 1 then
-            return list[(n + 1) / 2]
-        end
-
-        return (list[n / 2] + list[n / 2 + 1]) / 2
-    end
-
-    local function averageVector(list)
-        local total = Vector3.zero
-        local count = 0
-
-        for _, v in ipairs(list) do
-            total += v
-            count += 1
-        end
-
-        if count == 0 then
-            return Vector3.zero
-        end
-
-        return total / count
-    end
-
-    local function classifyShot(samples)
-        local speeds = {}
-        local verticalRatios = {}
-        local spins = {}
-        local velocities = {}
-        local omegas = {}
-
-        for _, sample in ipairs(samples) do
-            local vel = sample.Velocity
-            local omega = sample.Omega
-
-            local horizontal = Vector3.new(vel.X, 0, vel.Z).Magnitude
-            local speed = vel.Magnitude
-            local verticalRatio = vel.Y / math.max(horizontal, 1)
-
-            table.insert(speeds, speed)
-            table.insert(verticalRatios, verticalRatio)
-            table.insert(spins, omega.Magnitude)
-            table.insert(velocities, vel)
-            table.insert(omegas, omega)
-        end
-
-        local speed = medianNumber(speeds)
-        local verticalRatio = medianNumber(verticalRatios)
-        local spin = medianNumber(spins)
-
-        local vel = averageVector(velocities)
-        local omega = averageVector(omegas)
-
-        local absYSpin = math.abs(omega.Y)
-        local absXSpin = math.abs(omega.X)
-
-        local profileName = "PowerMiddle"
-        local confidence = 0.55
-
-        if speed < 38 and math.abs(verticalRatio) < 0.18 then
-            profileName = "SoftTap"
-            confidence = 0.92
-
-        elseif speed >= 38 and speed < 70 and math.abs(verticalRatio) < 0.12 and spin < 8 then
-            profileName = "Dribble"
-            confidence = 0.86
-
-        elseif speed >= 70 and math.abs(verticalRatio) < 0.16 and spin < 10 then
-            profileName = "GroundPower"
-            confidence = 0.88
-
-        elseif speed < 75 and verticalRatio > 0.48 and spin < 10 then
-            profileName = "HighChip"
-            confidence = 0.9
-
-        elseif speed < 85 and verticalRatio > 0.28 and spin < 10 then
-            profileName = "Chip"
-            confidence = 0.88
-
-        elseif spin > 20 and absYSpin > 12 and verticalRatio > 0.45 then
-            profileName = "CurveHighRight"
-            confidence = 0.93
-
-        elseif spin > 18 and absYSpin > 12 then
-            profileName = "CurveLowRight"
-            confidence = 0.91
-
-        elseif spin > 22 and absXSpin > absYSpin * 1.35 and verticalRatio > 0.55 then
-            profileName = "TopspinHigh"
-            confidence = 0.91
-
-        elseif spin > 22 and absXSpin > absYSpin * 1.35 then
-            profileName = "TopspinLow"
-            confidence = 0.89
-
-        elseif speed > 125 and verticalRatio < 0.18 then
-            profileName = "PowerMiddle"
-            confidence = 0.86
-
-        elseif speed > 90 and verticalRatio > 0.3 then
-            profileName = "PowerUp"
-            confidence = 0.83
-
-        elseif speed > 80 and math.abs(verticalRatio) < 0.2 then
-            profileName = "GroundPass"
-            confidence = 0.78
-        end
-
-        return Profiles[profileName], profileName, confidence
-    end
-
-    local function resetPendingShot()
-        ShotState.Pending = false
-        ShotState.PendingStarted = 0
-        table.clear(ShotState.Samples)
-    end
-
-    local function lockShotProfile(profile, profileName, confidence)
-        ShotState.Active = true
-        ShotState.Pending = false
-        ShotState.Profile = profile
-        ShotState.ProfileName = profileName
-        ShotState.Confidence = confidence
-        ShotState.LockedUntil = os.clock() + Settings.ShotLockSeconds
-        ShotState.StartedAt = os.clock()
-        ShotState.BounceCount = 0
-    end
-
-    local function updateShotDecision(ballPart, vel)
-        local now = os.clock()
-        local speed = vel.Magnitude
-        local omega = safeVector(ballPart.AssemblyAngularVelocity)
-
-        if speed < Settings.StopSpeed then
-            ShotState.Active = false
-            ShotState.Profile = Profiles.Idle
-            ShotState.ProfileName = "Idle"
-            resetPendingShot()
-            return
-        end
-
-        if ShotState.Active and now < ShotState.LockedUntil then
-            return
-        end
-
-        if speed < Settings.MinShotSpeed then
-            return
-        end
-
-        if not ShotState.Pending then
-            ShotState.Pending = true
-            ShotState.PendingStarted = now
-            ShotState.Samples = {}
-        end
-
-        table.insert(ShotState.Samples, {
-            Time = now,
-            Velocity = vel,
-            Omega = omega
-        })
-
-        if #ShotState.Samples >= 5 or now - ShotState.PendingStarted >= Settings.InitialDecisionWindow then
-            local profile, profileName, confidence = classifyShot(ShotState.Samples)
-            lockShotProfile(profile, profileName, confidence)
-            return
-        end
-    end
-
-    local function getCurrentProfile()
-        if ShotState.Profile then
-            return ShotState.Profile
-        end
-
-        return Profiles.Idle
-    end
-
-    local function sampleBall(ballPart)
-        local now = os.clock()
-        local pos = safeVector(ballPart.Position)
-        local vel = safeVector(ballPart.AssemblyLinearVelocity)
-
-        if not LastClock then
-            LastClock = now
-            LastPos = pos
-            LastVel = vel
-            LastCalculatedVel = vel
-            return vel
-        end
-
-        local dt = now - LastClock
-        if dt <= 0.001 or dt > 0.12 then
-            LastClock = now
-            LastPos = pos
-            LastVel = vel
-            LastCalculatedVel = vel
-            return vel
-        end
-
-        local calculatedVel = (pos - LastPos) / dt
-        local blendedVel = vel:Lerp(calculatedVel, 0.18)
-
-        local rawAccel = (vel - LastVel) / dt
-
-        if rawAccel.Magnitude < Settings.MaxAccelSample then
-            if not LiveState.HasAccel then
-                LiveState.SmoothAccel = rawAccel
-                LiveState.HasAccel = true
-            else
-                LiveState.SmoothAccel = LiveState.SmoothAccel:Lerp(rawAccel, 0.1)
-            end
-
-            local profile = getCurrentProfile()
-            local gravity = Vector3.new(0, -Workspace.Gravity * profile.GravityScale, 0)
-            local residual = rawAccel - gravity
-
-            local grounded = isNearGround(ballPart, pos)
-            local speed = vel.Magnitude
-
-            if speed > 4 then
-                if grounded then
-                    local horizontalVel = Vector3.new(vel.X, 0, vel.Z)
-                    local horizontalAccel = Vector3.new(rawAccel.X, 0, rawAccel.Z)
-                    local denom = horizontalVel:Dot(horizontalVel)
-
-                    if denom > 0.1 then
-                        local frictionGuess = -horizontalAccel:Dot(horizontalVel) / denom
-                        frictionGuess = clamp(frictionGuess, 0.05, 5)
-                        LiveState.SmoothGroundFriction = lerp(LiveState.SmoothGroundFriction, frictionGuess, 0.02)
-                    end
-                else
-                    local denom = vel:Dot(vel)
-
-                    if denom > 0.1 then
-                        local dragGuess = -residual:Dot(vel) / denom
-                        dragGuess = clamp(dragGuess, 0.01, 2)
-                        LiveState.SmoothDrag = lerp(LiveState.SmoothDrag, dragGuess, 0.014)
-                    end
-
-                    local omega = safeVector(ballPart.AssemblyAngularVelocity)
-                    local cross = omega:Cross(vel)
-                    local crossDenom = cross:Dot(cross)
-
-                    if crossDenom > 1 then
-                        local magnusGuess = residual:Dot(cross) / crossDenom
-                        magnusGuess = clamp(magnusGuess, -0.05, 0.05)
-                        LiveState.SmoothMagnus = lerp(LiveState.SmoothMagnus, magnusGuess, 0.014)
-                    end
-                end
-            end
-        end
-
-        LastClock = now
-        LastPos = pos
-        LastVel = vel
-        LastCalculatedVel = calculatedVel
-
-        updateShotDecision(ballPart, blendedVel)
-
-        return blendedVel
-    end
-
-    local function getMaterialResponse(material)
-        return MaterialResponse[material] or {
-            BounceMul = 0.85,
-            TangentMul = 0.8,
-            GroundFrictionMul = 1
-        }
-    end
-
-    local function calculateAirAcceleration(profile, vel, omega, simulatedAge)
-        local gravityScale = profile.GravityScale
-        local drag = profile.AirDrag
-        local magnus = profile.Magnus
-
-        if Settings.UseLiveCorrection then
-            drag = lerp(drag, LiveState.SmoothDrag, 0.35)
-            magnus = lerp(magnus, LiveState.SmoothMagnus, 0.25)
-        end
-
-        local gravity = Vector3.new(0, -Workspace.Gravity * gravityScale, 0)
-        local dragAccel = -vel * drag
-        local magnusAccel = omega:Cross(vel) * magnus
-        local downforce = Vector3.new(0, -profile.Downforce, 0)
-
-        local accel = gravity + dragAccel + magnusAccel + downforce
-
-        if Settings.HorizonGuard then
-            local horizontal = Vector3.new(vel.X, 0, vel.Z).Magnitude
-            local verticalRatio = math.abs(vel.Y) / math.max(horizontal, 1)
-
-            if horizontal > 45 and verticalRatio < 0.08 and simulatedAge > 0.18 then
-                local horizonPenalty = clamp(simulatedAge / Settings.MaxFlatFlightSeconds, 0, 1)
-                accel += Vector3.new(
-                    -vel.X * 0.035 * horizonPenalty,
-                    -Workspace.Gravity * 0.18 * profile.HorizonDownBias * horizonPenalty,
-                    -vel.Z * 0.035 * horizonPenalty
-                )
-            end
-        end
-
-        if Settings.UseLiveCorrection and LiveState.HasAccel and simulatedAge < 0.35 then
-            accel = accel:Lerp(LiveState.SmoothAccel, 0.16)
-        end
-
-        return accel
-    end
-
-    local function calculateGroundAcceleration(profile, vel, material)
-        local response = getMaterialResponse(material)
-
-        local friction = profile.GroundFriction
-        if Settings.UseLiveCorrection then
-            friction = lerp(friction, LiveState.SmoothGroundFriction, 0.28)
-        end
-
-        friction *= response.GroundFrictionMul
-
-        local horizontalVel = Vector3.new(vel.X, 0, vel.Z)
-
-        return Vector3.new(
-            -horizontalVel.X * friction,
-            0,
-            -horizontalVel.Z * friction
-        )
-    end
-
-    local function resolveBounce(profile, vel, normal, material, isFirstBounce)
-        local response = getMaterialResponse(material)
-
-        local normalVel = normal * vel:Dot(normal)
-        local tangentVel = vel - normalVel
-
-        local bounce = isFirstBounce and profile.FirstBounce or profile.Bounce
-        local tangentDamping = profile.TangentDamping
-
-        bounce *= response.BounceMul
-        tangentDamping *= response.TangentMul
-
-        local newVel = tangentVel * tangentDamping - normalVel * bounce
-
-        if isFirstBounce then                                                    
-                                                                              
-            if math.abs(vel.Y) < 35 then
-                newVel = Vector3.new(
-                    newVel.X,
-                    newVel.Y * 0.68,
-                    newVel.Z
-                )
-            else
-                newVel = Vector3.new(
-                    newVel.X,
-                    newVel.Y * 0.82,
-                    newVel.Z
-                )
-            end
-        end
-
-        if math.abs(newVel.Y) < 2.2 then
-            newVel = Vector3.new(newVel.X, 0, newVel.Z)
-        end
-
-        return newVel
-    end
-
-    local function simulate(ballPart)
-        local points = {}
-        local landingPos = nil
-
-        local profile = getCurrentProfile()
-
-        local pos = safeVector(ballPart.Position)
-        local vel = sampleBall(ballPart)
-        local omega = safeVector(ballPart.AssemblyAngularVelocity)
-
-        local speed = vel.Magnitude
-
-        if speed < Settings.StopSpeed then
-            return points, nil
-        end
-
-        if speed > Settings.MaxReasonableSpeed then
-            vel = vel.Unit * Settings.MaxReasonableSpeed
-        end
-
-        local radius = getBallRadius(ballPart)
-
-        local totalTime = Settings.PredictionTime
-        local pointCount = math.max(20, Settings.PointCount)
-        local dt = totalTime / pointCount
-
-        local simulatedAge = 0
-        local bounceCount = 0
-        local lastGroundMaterial = Enum.Material.Grass
-
-        table.insert(points, pos)
-
-        for _ = 1, pointCount do
-            simulatedAge += dt
-
-            local grounded, groundResult = isNearGround(ballPart, pos)
-            local accel
-
-            if grounded and Settings.UseGroundRoll and math.abs(vel.Y) < 4.5 then
-                lastGroundMaterial = groundResult.Material
-
-                local groundY = groundResult.Position.Y + radius + Settings.BounceSkin
-                pos = Vector3.new(pos.X, groundY, pos.Z)
-
-                if vel.Y < 0 then
-                    vel = Vector3.new(vel.X, 0, vel.Z)
-                end
-
-                accel = calculateGroundAcceleration(profile, vel, groundResult.Material)
-            else
-                accel = calculateAirAcceleration(profile, vel, omega, simulatedAge)
-            end
-
-            local nextVel = vel + accel * dt
-            local nextPos = pos + vel * dt + 0.5 * accel * dt * dt
-
-            local direction = nextPos - pos
-            local hit = nil
-
-            if direction.Magnitude > 0.001 then
-                hit = castBall(ballPart, pos, direction)
-            end
-
-            if hit then
-                landingPos = hit.Position
-                table.insert(points, hit.Position)
-
-                local normal = hit.Normal
-                local movingIntoSurface = nextVel:Dot(normal) < -0.25
-
-                if Settings.ShowBounces and movingIntoSurface and bounceCount < Settings.MaxBounces then
-                    bounceCount += 1
-                    ShotState.BounceCount = bounceCount
-
-                    local isFirstBounce = bounceCount == 1
-                    local bouncedVel = resolveBounce(
-                        profile,
-                        nextVel,
-                        normal,
-                        hit.Material,
-                        isFirstBounce
-                    )
-
-                    if bouncedVel.Magnitude < Settings.StopSpeed then
-                        break
-                    end
-
-                    pos = hit.Position + normal * (radius + Settings.BounceSkin)
-                    vel = bouncedVel
-
-                    omega *= isFirstBounce and 0.72 or 0.58
-
-                    table.insert(points, pos)
-                    continue
-                end
-
-                break
-            end
-
-            table.insert(points, nextPos)
-
-            pos = nextPos
-            vel = nextVel
-
-            local spinDecay = 1 - clamp(0.22 * dt, 0, 0.12)
-            omega *= spinDecay
-
-            if vel.Magnitude < Settings.StopSpeed then
-                landingPos = pos
-                break
-            end
-
-            if #points >= pointCount then
-                landingPos = pos
-                break
-            end
-        end
-
-        return points, landingPos
-    end
-
-    local function render(points, landingPos)
-        ensureFolder()
-
-        local profileName = ShotState.ProfileName or "Idle"
-
-        for i, point in ipairs(points) do
-            local dot = getDot(i)
-
-            local fade = i / math.max(#points, 1)
-            local size = Settings.DotSize * (1.18 - fade * 0.42)
-
-            dot.Size = Vector3.new(size, size, size)
-            dot.Position = point
-            dot.Transparency = clamp(0.06 + fade * 0.58, 0.06, 0.78)
-
-            if profileName:find("Curve") then
-                dot.Color = Color3.fromRGB(190, 95, 255)
-            elseif profileName:find("Topspin") then
-                dot.Color = Color3.fromRGB(255, 140, 75)
-            elseif profileName:find("Chip") then
-                dot.Color = Color3.fromRGB(95, 255, 180)
-            elseif profileName:find("Ground") or profileName:find("Dribble") or profileName:find("Soft") then
-                dot.Color = Color3.fromRGB(100, 210, 255)
-            else
-                dot.Color = Color3.fromRGB(90, 150, 255)
-            end
-        end
-
-        for i = #points + 1, #Dots do
-            if Dots[i] then
-                Dots[i].Transparency = 1
-            end
-        end
-
-        if Settings.ShowLanding and landingPos then
-            local landing = getLandingDot()
-            landing.Position = landingPos
-            landing.Size = Vector3.new(
-                Settings.LandingDotSize,
-                Settings.LandingDotSize,
-                Settings.LandingDotSize
-            )
-            landing.Transparency = 0.08
-        elseif LandingDot then
-            LandingDot.Transparency = 1
-        end
-    end
-
-    local function update()
-        if not Enabled then
-            return
-        end
-
-        local now = os.clock()
-        local interval = 1 / math.max(10, Settings.UpdateRate)
-
-        if now - LastUpdate < interval then
-            return
-        end
-
-        LastUpdate = now
-
-        local ballPart = getBallPart()
-        if not ballPart then
-            hideVisuals()
-            return
-        end
-
-        local points, landingPos = simulate(ballPart)
-
-        if #points <= 1 then
-            hideVisuals()
-            return
-        end
-
-        render(points, landingPos)
-    end
-
-    local function start()
-        clearVisuals()
-        Enabled = true
-        ensureFolder()
-
-        if RenderConnection then
-            RenderConnection:Disconnect()
-            RenderConnection = nil
-        end
-
-        RenderConnection = RunService.RenderStepped:Connect(update)
-    end
-
-    local function stop()
-        Enabled = false
-
-        if RenderConnection then
-            RenderConnection:Disconnect()
-            RenderConnection = nil
-        end
-
-        clearVisuals()
-    end
-
-    local category = getCategory()
-    if not category or not category.CreateModule then return end
-
-    Trajectories = category:CreateModule({
-        Name = "Trajectories",
-        Function = function(callback)
-            if callback then
-                start()
-            else
-                stop()
-            end
-        end,
-        Tooltip = "See where the ball is going"
-    })
-
-    if Trajectories and Trajectories.CreateSlider then
-        Trajectories:CreateSlider({
-            Name = "Prediction Time",
-            Min = 1,
-            Max = 6,
-            Default = Settings.PredictionTime,
-            Suffix = "s",
-            Function = function(value)
-                Settings.PredictionTime = value
-            end
-        })
-
-        Trajectories:CreateSlider({
-            Name = "Path Points",
-            Min = 35,
-            Max = 180,
-            Default = Settings.PointCount,
-            Function = function(value)
-                Settings.PointCount = math.floor(value)
-            end
-        })
-
-        Trajectories:CreateSlider({
-            Name = "Update Rate",
-            Min = 15,
-            Max = 144,
-            Default = Settings.UpdateRate,
-            Suffix = "hz",
-            Function = function(value)
-                Settings.UpdateRate = value
-            end
-        })
-
-        Trajectories:CreateSlider({
-            Name = "Dot Size",
-            Min = 8,
-            Max = 35,
-            Default = math.floor(Settings.DotSize * 100),
-            Function = function(value)
-                Settings.DotSize = value / 100
-            end
-        })
-
-        Trajectories:CreateSlider({
-            Name = "Shot Lock",
-            Min = 15,
-            Max = 100,
-            Default = math.floor(Settings.ShotLockSeconds * 100),
-            Suffix = "%",
-            Function = function(value)
-                Settings.ShotLockSeconds = value / 100
-            end
-        })
-
-        Trajectories:CreateSlider({
-            Name = "Bounce Limit",
-            Min = 0,
-            Max = 5,
-            Default = Settings.MaxBounces,
-            Function = function(value)
-                Settings.MaxBounces = math.floor(value)
-            end
-        })
-    end
-
-    if Trajectories and Trajectories.CreateToggle then
-        Trajectories:CreateToggle({
-            Name = "Live Correction",
-            Default = Settings.UseLiveCorrection,
-            Function = function(value)
-                Settings.UseLiveCorrection = value
-            end
-        })
-
-        Trajectories:CreateToggle({
-            Name = "Spherecast",
-            Default = Settings.UseSpherecast,
-            Function = function(value)
-                Settings.UseSpherecast = value
-            end
-        })
-
-        Trajectories:CreateToggle({
-            Name = "Ground Roll",
-            Default = Settings.UseGroundRoll,
-            Function = function(value)
-                Settings.UseGroundRoll = value
-            end
-        })
-
-        Trajectories:CreateToggle({
-            Name = "Bounces",
-            Default = Settings.ShowBounces,
-            Function = function(value)
-                Settings.ShowBounces = value
-            end
-        })
-
-        Trajectories:CreateToggle({
-            Name = "Horizon Guard",
-            Default = Settings.HorizonGuard,
-            Function = function(value)
-                Settings.HorizonGuard = value
-            end
-        })
-
-        Trajectories:CreateToggle({
-            Name = "Landing Dot",
-            Default = Settings.ShowLanding,
-            Function = function(value)
-                Settings.ShowLanding = value
-            end
-        })
-    end
+	local runService = game:GetService('RunService')
+	local workspaceService = game:GetService('Workspace')
+
+	local Trajectories
+	local PredictionTime
+	local PathPoints
+	local UpdateRate
+	local BounceLimit
+	local FloorHeight
+	local BallRadius
+	local LineWidth
+	local LineColor
+	local BounceColor
+	local connection
+	local marker
+	local lastpoints = 0
+	local accumulator = 0
+	local parts = {}
+	local attachments = {}
+	local beams = {}
+
+	local function getcolor(option, fallback)
+		return option and Color3.fromHSV(option.Hue, option.Sat, option.Value) or fallback
+	end
+
+	local function clearvisuals()
+		for _, beam in beams do
+			beam:Destroy()
+		end
+		for _, part in parts do
+			part:Destroy()
+		end
+		if marker then
+			marker:Destroy()
+			marker = nil
+		end
+		table.clear(parts)
+		table.clear(attachments)
+		table.clear(beams)
+		lastpoints = 0
+	end
+
+	local function hidevisuals()
+		for _, beam in beams do
+			beam.Enabled = false
+		end
+		if marker then
+			marker.Transparency = 1
+		end
+	end
+
+	local function createpart(index)
+		local part = Instance.new('Part')
+		part.Name = 'TrajectoryPoint_'..index
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.CastShadow = false
+		part.Transparency = 1
+		part.Size = Vector3.new(0.1, 0.1, 0.1)
+		part.Parent = workspaceService
+
+		local attachment = Instance.new('Attachment')
+		attachment.Parent = part
+
+		parts[index] = part
+		attachments[index] = attachment
+	end
+
+	local function createbeam(index)
+		local beam = Instance.new('Beam')
+		beam.Name = 'TrajectoryBeam_'..index
+		beam.Attachment0 = attachments[index]
+		beam.Attachment1 = attachments[index + 1]
+		beam.FaceCamera = true
+		beam.LightEmission = 1
+		beam.LightInfluence = 0
+		beam.Segments = 2
+		beam.Width0 = LineWidth.Value / 100
+		beam.Width1 = LineWidth.Value / 100
+		beam.Color = ColorSequence.new(getcolor(LineColor, Color3.fromRGB(255, 50, 50)))
+		beam.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(1, 0.45)
+		})
+		beam.Enabled = false
+		beam.Parent = parts[index]
+		beams[index] = beam
+	end
+
+	local function makevisuals()
+		local amount = PathPoints.Value
+		if lastpoints == amount then return end
+
+		clearvisuals()
+
+		for i = 1, amount do
+			createpart(i)
+		end
+
+		for i = 1, amount - 1 do
+			createbeam(i)
+		end
+
+		marker = Instance.new('Part')
+		marker.Name = 'TrajectoryBounce'
+		marker.Anchored = true
+		marker.CanCollide = false
+		marker.CanTouch = false
+		marker.CanQuery = false
+		marker.CastShadow = false
+		marker.Shape = Enum.PartType.Block
+		marker.Material = Enum.Material.Neon
+		marker.Size = Vector3.new(3, 0.18, 3)
+		marker.Transparency = 1
+		marker.Color = getcolor(BounceColor, Color3.fromRGB(255, 50, 50))
+		marker.Parent = workspaceService
+
+		lastpoints = amount
+	end
+
+	local function updatecolors()
+		local linecolor = getcolor(LineColor, Color3.fromRGB(255, 50, 50))
+		local bouncecolor = getcolor(BounceColor, Color3.fromRGB(255, 50, 50))
+		local width = LineWidth.Value / 100
+
+		for _, beam in beams do
+			beam.Color = ColorSequence.new(linecolor)
+			beam.Width0 = width
+			beam.Width1 = width
+		end
+
+		if marker then
+			marker.Color = bouncecolor
+		end
+	end
+
+	local function findball()
+		local temp = workspaceService:FindFirstChild('Temp')
+		local ball = temp and temp:FindFirstChild('Ball') or workspaceService:FindFirstChild('Ball')
+
+		if ball and ball:IsA('BasePart') then
+			return ball
+		end
+
+		if ball and ball:IsA('Model') then
+			return ball.PrimaryPart or ball:FindFirstChildWhichIsA('BasePart', true)
+		end
+	end
+
+	local function getforceacceleration(ball)
+		local mass = math.max(ball.AssemblyMass, 0.001)
+		local acceleration = Vector3.zero
+
+		for _, obj in ball:GetDescendants() do
+			if obj:IsA('VectorForce') and obj.Enabled then
+				local force = obj.Force
+
+				if obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment0 and obj.Attachment0 then
+					force = obj.Attachment0.WorldCFrame:VectorToWorldSpace(force)
+				elseif obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment1 and obj.Attachment1 then
+					force = obj.Attachment1.WorldCFrame:VectorToWorldSpace(force)
+				end
+
+				acceleration += force / mass
+			end
+		end
+
+		return acceleration
+	end
+
+	local function simulate(ball)
+		local amount = PathPoints.Value
+		local steptime = math.clamp(PredictionTime.Value / math.max(amount, 1), 0.005, 0.08)
+		local floorheight = FloorHeight.Value
+		local radius = BallRadius.Value
+		local bounces = 0
+		local firstbounce
+		local points = {}
+		local position = ball.Position
+		local velocity = ball.AssemblyLinearVelocity
+		local gravity = Vector3.new(0, -workspaceService.Gravity, 0)
+		local acceleration = gravity + getforceacceleration(ball)
+
+		for i = 1, amount do
+			local oldposition = position
+			local oldvelocity = velocity
+
+			velocity += acceleration * steptime
+			position += velocity * steptime
+
+			if position.Y - radius <= floorheight then
+				local rayalpha = 0
+				local bottomold = oldposition.Y - radius
+				local bottomnew = position.Y - radius
+				local delta = bottomold - bottomnew
+
+				if math.abs(delta) > 0.0001 then
+					rayalpha = math.clamp((bottomold - floorheight) / delta, 0, 1)
+				end
+
+				local impact = oldposition:Lerp(position, rayalpha)
+				impact = Vector3.new(impact.X, floorheight + radius, impact.Z)
+				firstbounce = firstbounce or impact
+
+				if bounces < BounceLimit.Value then
+					bounces += 1
+					position = impact
+					velocity = Vector3.new(oldvelocity.X, -velocity.Y * 0.7, oldvelocity.Z)
+				else
+					position = impact
+					velocity = Vector3.new(velocity.X, 0, velocity.Z)
+				end
+			end
+
+			points[i] = position
+		end
+
+		return points, firstbounce
+	end
+
+	local function update()
+		makevisuals()
+		updatecolors()
+
+		local ball = findball()
+		if not ball then
+			hidevisuals()
+			return
+		end
+
+		local points, bounce = simulate(ball)
+
+		for i = 1, lastpoints do
+			local point = points[i]
+			if point and parts[i] then
+				parts[i].Position = point
+			end
+		end
+
+		for _, beam in beams do
+			beam.Enabled = true
+		end
+
+		if bounce and marker then
+			marker.Position = Vector3.new(bounce.X, FloorHeight.Value, bounce.Z)
+			marker.Transparency = 0.45
+		elseif marker then
+			marker.Transparency = 1
+		end
+	end
+
+	Trajectories = vape.Categories.Render:CreateModule({
+		Name = 'Trajectories',
+		Function = function(callback)
+			if callback then
+				accumulator = 0
+				makevisuals()
+
+				connection = runService.Heartbeat:Connect(function(dt)
+					accumulator += dt
+					if accumulator < 1 / UpdateRate.Value then return end
+					accumulator = 0
+					update()
+				end)
+			else
+				if connection then
+					connection:Disconnect()
+					connection = nil
+				end
+				clearvisuals()
+			end
+		end,
+		Tooltip = 'Shows the ball trajectory and first bounce'
+	})
+
+	PredictionTime = Trajectories:CreateSlider({
+		Name = 'Prediction Time',
+		Min = 0.3,
+		Max = 4,
+		Default = 1.2,
+		Decimal = 10,
+		Suffix = 'seconds'
+	})
+
+	PathPoints = Trajectories:CreateSlider({
+		Name = 'Path Points',
+		Min = 10,
+		Max = 120,
+		Default = 30,
+		Decimal = 1,
+		Function = function()
+			if Trajectories.Enabled then
+				clearvisuals()
+				makevisuals()
+			end
+		end
+	})
+
+	UpdateRate = Trajectories:CreateSlider({
+		Name = 'Update Rate',
+		Min = 10,
+		Max = 144,
+		Default = 60,
+		Decimal = 1,
+		Suffix = 'hz'
+	})
+
+	BounceLimit = Trajectories:CreateSlider({
+		Name = 'Bounce Limit',
+		Min = 0,
+		Max = 5,
+		Default = 1,
+		Decimal = 1
+	})
+
+	FloorHeight = Trajectories:CreateSlider({
+		Name = 'Floor Height',
+		Min = -20,
+		Max = 30,
+		Default = 9.6,
+		Decimal = 10
+	})
+
+	BallRadius = Trajectories:CreateSlider({
+		Name = 'Ball Radius',
+		Min = 0.2,
+		Max = 5,
+		Default = 1,
+		Decimal = 10
+	})
+
+	LineWidth = Trajectories:CreateSlider({
+		Name = 'Line Width',
+		Min = 5,
+		Max = 40,
+		Default = 15,
+		Decimal = 1,
+		Function = updatecolors
+	})
+
+	LineColor = Trajectories:CreateColorSlider({
+		Name = 'Line Color',
+		DefaultHue = 0,
+		DefaultSat = 0.8,
+		DefaultValue = 1,
+		Function = updatecolors
+	})
+
+	BounceColor = Trajectories:CreateColorSlider({
+		Name = 'Bounce Color',
+		DefaultHue = 0,
+		DefaultSat = 0.8,
+		DefaultValue = 1,
+		Function = updatecolors
+	})
+
+	Trajectories:Clean(function()
+		if connection then
+			connection:Disconnect()
+			connection = nil
+		end
+		clearvisuals()
+	end)
 end)
 
  run(function()
