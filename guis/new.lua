@@ -5778,6 +5778,25 @@ mainapi:CreateCategory({
 	Size = UDim2.fromOffset(15, 14)
 })
 mainapi:CreateCategory({
+	Name = 'Instant actions',
+	Icon = getcustomasset('newvape/assets/new/inventoryicon.png'),
+	Size = UDim2.fromOffset(16, 16)
+})
+do
+	local categorymeta = getmetatable(mainapi.Categories)
+	setmetatable(mainapi.Categories, {
+		__index = function(tab, ind)
+			if ind == 'Minigames' or ind == 'InstantActions' then
+				return rawget(tab, 'Instant actions')
+			end
+
+			local oldindex = categorymeta and categorymeta.__index
+			return type(oldindex) == 'function' and oldindex(tab, ind) or type(oldindex) == 'table' and oldindex[ind] or nil
+		end,
+		__newindex = categorymeta and categorymeta.__newindex
+	})
+end
+mainapi:CreateCategory({
 	Name = 'World',
 	Icon = getcustomasset('newvape/assets/new/worldicon.png'),
 	Size = UDim2.fromOffset(14, 14)
@@ -6067,9 +6086,10 @@ guipane:CreateButton({
 			BlatantCategory = 2,
 			RenderCategory = 3,
 			UtilityCategory = 4,
-			WorldCategory = 5,
-			FriendsCategory = 6,
-			ProfilesCategory = 7
+			['Instant actionsCategory'] = 5,
+			WorldCategory = 6,
+			FriendsCategory = 7,
+			ProfilesCategory = 8
 		}
 		local categories = {}
 		for _, v in mainapi.Categories do
