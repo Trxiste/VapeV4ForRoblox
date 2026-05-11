@@ -6749,7 +6749,7 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 		getkey('PowerShot'):FireServer()
 	end)
 
-	task.wait(0.6)
+	task.wait(0.45)
 
 	if not ball:IsDescendantOf(workspaceService) then return end
 
