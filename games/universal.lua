@@ -57,15 +57,14 @@ local guiService = cloneref(game:GetService('GuiService'))
 local groupService = cloneref(game:GetService('GroupService'))
 local textChatService = cloneref(game:GetService('TextChatService'))
 local contextService = cloneref(game:GetService('ContextActionService'))
+local collectionService = cloneref(game:GetService('CollectionService'))
+local debrisService = cloneref(game:GetService('Debris'))
 local coreGui = cloneref(game:GetService('CoreGui'))
-
-local isnetworkowner = identifyexecutor and table.find({'AWP', 'Nihon'}, ({identifyexecutor()})[1]) and isnetworkowner or function()
-	return true
-end
 
 local gameCamera = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
 local lplr = playersService.LocalPlayer
 local assetfunction = getcustomasset
+
 vape = shared.vape
 
 if not vape then
@@ -75,54 +74,1225 @@ end
 vape.Libraries = vape.Libraries or {}
 vape.Categories = vape.Categories or {}
 
-local hash = loadstring(downloadFile('newvape/libraries/hash.lua'), 'hash')()
-local prediction = loadstring(downloadFile('newvape/libraries/prediction.lua'), 'prediction')()
-local entitylib = loadstring(downloadFile('newvape/libraries/entity.lua'), 'entitylibrary')()
+local hash
+local prediction
+local entitylib
+
+run(function()
+	hash = loadstring(downloadFile('newvape/libraries/hash.lua'), 'hash')()
+end)
+
+run(function()
+	prediction = loadstring(downloadFile('newvape/libraries/prediction.lua'), 'prediction')()
+end)
+
+run(function()
+	entitylib = loadstring(downloadFile('newvape/libraries/entity.lua'), 'entitylibrary')()
+end)
+
+local universal = vape.Libraries.universal or {}
+vape.Libraries.universal = universal
+
+universal.Version = '2.1.0'
+universal.Started = universal.Started or os.clock()
+universal.Ready = false
+universal.Services = universal.Services or {}
+universal.Stores = universal.Stores or {}
+universal.Signals = universal.Signals or {}
+universal.Modules = universal.Modules or {}
+universal.Objects = universal.Objects or {}
+universal.Cache = universal.Cache or {}
+universal.Diagnostics = universal.Diagnostics or {
+	CreatedAt = os.clock(),
+	Toggles = 0,
+	ModulesCreated = 0,
+	Connections = 0,
+	Instances = 0,
+	Warnings = 0,
+	LastToggle = nil,
+	LastModule = nil
+}
+
+universal.Services.Players = playersService
+universal.Services.ReplicatedStorage = replicatedStorage
+universal.Services.RunService = runService
+universal.Services.UserInputService = inputService
+universal.Services.TweenService = tweenService
+universal.Services.Lighting = lightingService
+universal.Services.MarketplaceService = marketplaceService
+universal.Services.TeleportService = teleportService
+universal.Services.HttpService = httpService
+universal.Services.GuiService = guiService
+universal.Services.GroupService = groupService
+universal.Services.TextChatService = textChatService
+universal.Services.ContextActionService = contextService
+universal.Services.CollectionService = collectionService
+universal.Services.Debris = debrisService
+universal.Services.CoreGui = coreGui
+universal.Services.Workspace = workspace
 
 local function removeTags(str)
 	str = tostring(str or '')
 	str = str:gsub('<br%s*/>', '\n')
-	return (str:gsub('<[^<>]->', ''))
+	return str:gsub('<[^<>]->', '')
 end
 
-local function optionEnabled(categoryName, optionName)
-	local category = vape.Categories and vape.Categories[categoryName]
+local function splitpath(path)
+	local result = {}
+	for part in tostring(path or ''):gmatch('[^%.]+') do
+		table.insert(result, part)
+	end
+	return result
+end
+
+local function deepcopy(value, seen)
+	if type(value) ~= 'table' then return value end
+	seen = seen or {}
+	if seen[value] then return seen[value] end
+
+	local copy = {}
+	seen[value] = copy
+
+	for k, v in pairs(value) do
+		copy[deepcopy(k, seen)] = deepcopy(v, seen)
+	end
+
+	return copy
+end
+
+local function tablecount(tbl)
+	local count = 0
+	for _ in pairs(tbl or {}) do
+		count += 1
+	end
+	return count
+end
+
+local function notify(title, text, duration, icon)
+	if vape and vape.CreateNotification then
+		vape:CreateNotification(title or 'Universal', tostring(text or ''), duration or 5, icon)
+	end
+end
+
+local function warnonce(key, text)
+	universal.Cache.Warnings = universal.Cache.Warnings or {}
+	if universal.Cache.Warnings[key] then return end
+	universal.Cache.Warnings[key] = true
+	universal.Diagnostics.Warnings += 1
+	warn('[universal.lua] '..tostring(text))
+end
+
+universal.Notify = notify
+universal.WarnOnce = warnonce
+universal.RemoveTags = removeTags
+universal.DeepCopy = deepcopy
+universal.SplitPath = splitpath
+universal.TableCount = tablecount
+
+local maid = {}
+maid.__index = maid
+
+function maid.new()
+	return setmetatable({
+		Tasks = {},
+		Alive = true
+	}, maid)
+end
+
+function maid:Give(task)
+	if not task then return task end
+
+	if not self.Alive then
+		pcall(function()
+			if typeof(task) == 'RBXScriptConnection' then
+				task:Disconnect()
+			elseif typeof(task) == 'Instance' then
+				task:Destroy()
+			elseif type(task) == 'function' then
+				task()
+			elseif type(task) == 'table' then
+				if type(task.Disconnect) == 'function' then
+					task:Disconnect()
+				elseif type(task.Destroy) == 'function' then
+					task:Destroy()
+				elseif type(task.Clean) == 'function' then
+					task:Clean()
+				end
+			end
+		end)
+		return task
+	end
+
+	if typeof(task) == 'RBXScriptConnection' then
+		universal.Diagnostics.Connections += 1
+	elseif typeof(task) == 'Instance' then
+		universal.Diagnostics.Instances += 1
+	end
+
+	table.insert(self.Tasks, task)
+	return task
+end
+
+function maid:Clean()
+	for i = #self.Tasks, 1, -1 do
+		local task = self.Tasks[i]
+		self.Tasks[i] = nil
+
+		pcall(function()
+			if typeof(task) == 'RBXScriptConnection' then
+				task:Disconnect()
+			elseif typeof(task) == 'Instance' then
+				task:Destroy()
+			elseif type(task) == 'function' then
+				task()
+			elseif type(task) == 'table' then
+				if type(task.Disconnect) == 'function' then
+					task:Disconnect()
+				elseif type(task.Destroy) == 'function' then
+					task:Destroy()
+				elseif type(task.Clean) == 'function' then
+					task:Clean()
+				end
+			end
+		end)
+	end
+end
+
+function maid:Destroy()
+	self:Clean()
+	self.Alive = false
+end
+
+universal.Maid = maid
+
+local signal = {}
+signal.__index = signal
+
+function signal.new()
+	return setmetatable({
+		Connections = {},
+		Destroyed = false
+	}, signal)
+end
+
+function signal:Connect(func)
+	if self.Destroyed then
+		return {
+			Connected = false,
+			Disconnect = function() end
+		}
+	end
+
+	local connection = {
+		Connected = true,
+		Function = func
+	}
+
+	function connection:Disconnect()
+		self.Connected = false
+	end
+
+	table.insert(self.Connections, connection)
+	return connection
+end
+
+function signal:Once(func)
+	local connection
+	connection = self:Connect(function(...)
+		if connection then
+			connection:Disconnect()
+		end
+		func(...)
+	end)
+	return connection
+end
+
+function signal:Fire(...)
+	if self.Destroyed then return end
+
+	local args = table.pack(...)
+	for _, connection in ipairs(table.clone(self.Connections)) do
+		if connection.Connected then
+			task.spawn(connection.Function, table.unpack(args, 1, args.n))
+		end
+	end
+
+	for i = #self.Connections, 1, -1 do
+		if not self.Connections[i].Connected then
+			table.remove(self.Connections, i)
+		end
+	end
+end
+
+function signal:Wait(timeout)
+	local thread = coroutine.running()
+	local finished = false
+	local connection
+
+	connection = self:Once(function(...)
+		if finished then return end
+		finished = true
+		coroutine.resume(thread, true, ...)
+	end)
+
+	if timeout then
+		task.delay(timeout, function()
+			if finished then return end
+			finished = true
+			connection:Disconnect()
+			coroutine.resume(thread, false)
+		end)
+	end
+
+	return coroutine.yield()
+end
+
+function signal:Destroy()
+	self.Destroyed = true
+	for _, connection in ipairs(self.Connections) do
+		connection:Disconnect()
+	end
+	table.clear(self.Connections)
+end
+
+universal.Signal = signal
+
+local store = {}
+store.__index = store
+
+function store.new(defaults)
+	return setmetatable({
+		Data = deepcopy(defaults or {}),
+		Changed = signal.new(),
+		PathSignals = {}
+	}, store)
+end
+
+function store:Get(path, fallback)
+	if path == nil or path == '' then
+		return self.Data
+	end
+
+	local pointer = self.Data
+	for _, part in ipairs(splitpath(path)) do
+		if type(pointer) ~= 'table' then
+			return fallback
+		end
+		pointer = pointer[part]
+		if pointer == nil then
+			return fallback
+		end
+	end
+
+	return pointer
+end
+
+function store:Set(path, value)
+	local parts = splitpath(path)
+	if #parts == 0 then return end
+
+	local pointer = self.Data
+	for i = 1, #parts - 1 do
+		local part = parts[i]
+		if type(pointer[part]) ~= 'table' then
+			pointer[part] = {}
+		end
+		pointer = pointer[part]
+	end
+
+	local key = parts[#parts]
+	local old = pointer[key]
+	pointer[key] = value
+
+	self.Changed:Fire(path, value, old)
+
+	local pathSignal = self.PathSignals[path]
+	if pathSignal then
+		pathSignal:Fire(value, old)
+	end
+
+	return value, old
+end
+
+function store:Update(path, func)
+	local old = self:Get(path)
+	local new = func(old)
+	self:Set(path, new)
+	return new, old
+end
+
+function store:Subscribe(path, func)
+	self.PathSignals[path] = self.PathSignals[path] or signal.new()
+	return self.PathSignals[path]:Connect(func)
+end
+
+function store:Destroy()
+	self.Changed:Destroy()
+	for _, sig in pairs(self.PathSignals) do
+		sig:Destroy()
+	end
+	table.clear(self.PathSignals)
+	table.clear(self.Data)
+end
+
+universal.Store = store
+
+function universal:GetStore(name, defaults)
+	self.Stores[name] = self.Stores[name] or store.new(defaults or {})
+	return self.Stores[name]
+end
+
+local runtimeStore = universal:GetStore('runtime', {
+	loaded = true,
+	modules = {},
+	settings = {},
+	stats = {
+		toggles = 0,
+		started = os.clock()
+	}
+})
+
+universal.RuntimeStore = runtimeStore
+
+local bus = universal.Signals.Bus or signal.new()
+universal.Signals.Bus = bus
+
+function universal:On(name, func)
+	self.Signals[name] = self.Signals[name] or signal.new()
+	return self.Signals[name]:Connect(func)
+end
+
+function universal:Once(name, func)
+	self.Signals[name] = self.Signals[name] or signal.new()
+	return self.Signals[name]:Once(func)
+end
+
+function universal:Emit(name, ...)
+	self.Signals[name] = self.Signals[name] or signal.new()
+	self.Signals[name]:Fire(...)
+	bus:Fire(name, ...)
+end
+
+local cache = {}
+cache.__index = cache
+
+function cache.new()
+	return setmetatable({
+		Values = {},
+		Timeouts = {}
+	}, cache)
+end
+
+function cache:Get(key)
+	local timeout = self.Timeouts[key]
+	if timeout and os.clock() > timeout then
+		self.Values[key] = nil
+		self.Timeouts[key] = nil
+		return nil
+	end
+	return self.Values[key]
+end
+
+function cache:Set(key, value, lifetime)
+	self.Values[key] = value
+	if lifetime then
+		self.Timeouts[key] = os.clock() + lifetime
+	else
+		self.Timeouts[key] = nil
+	end
+	return value
+end
+
+function cache:Remember(key, lifetime, func)
+	local current = self:Get(key)
+	if current ~= nil then
+		return current
+	end
+
+	local value = func()
+	self:Set(key, value, lifetime)
+	return value
+end
+
+function cache:Clear()
+	table.clear(self.Values)
+	table.clear(self.Timeouts)
+end
+
+universal.CacheClass = cache
+universal.Cache.Main = universal.Cache.Main or cache.new()
+
+local limiter = {}
+limiter.__index = limiter
+
+function limiter.new(rate)
+	return setmetatable({
+		Rate = rate or 1,
+		Last = 0
+	}, limiter)
+end
+
+function limiter:Ready()
+	local now = os.clock()
+	if now - self.Last >= self.Rate then
+		self.Last = now
+		return true
+	end
+	return false
+end
+
+function limiter:Reset()
+	self.Last = 0
+end
+
+universal.RateLimiter = limiter
+
+local function getcategory(name)
+	return vape and vape.Categories and vape.Categories[name]
+end
+
+local function getoption(categoryName, optionName)
+	local category = getcategory(categoryName)
 	local options = category and category.Options
-	local option = options and options[optionName]
+	return options and options[optionName]
+end
+
+local function optionenabled(categoryName, optionName)
+	local option = getoption(categoryName, optionName)
 	return option and option.Enabled or false
 end
 
-local function listHas(categoryName, listName, value)
-	local category = vape.Categories and vape.Categories[categoryName]
-	local list = category and category[listName]
-	return type(list) == 'table' and table.find(list, value) and true or false
+local function optionvalue(option, fallback)
+	if not option then return fallback end
+	if option.Value ~= nil then return option.Value end
+	if option.Enabled ~= nil then return option.Enabled end
+	if option.Object and option.Object.Value ~= nil then return option.Object.Value end
+	return fallback
 end
 
-local function getColorOption(categoryName, optionName, fallback)
-	local category = vape.Categories and vape.Categories[categoryName]
-	local options = category and category.Options
-	local option = options and options[optionName]
+local function listcontains(categoryName, listName, value)
+	local category = getcategory(categoryName)
+	local list = category and category[listName]
+	return type(list) == 'table' and table.find(list, value) ~= nil
+end
+
+local function getcoloroption(categoryName, optionName, fallback)
+	local option = getoption(categoryName, optionName)
 	if option and option.Hue and option.Sat and option.Value then
 		return Color3.fromHSV(option.Hue, option.Sat, option.Value)
 	end
 	return fallback or Color3.new(1, 1, 1)
 end
 
-local function isFriend(plr, recolor)
-	if not plr then return nil end
-	if optionEnabled('Friends', 'Use friends') then
-		local friend = listHas('Friends', 'ListEnabled', plr.Name)
-		if recolor then
-			friend = friend and optionEnabled('Friends', 'Recolor visuals')
-		end
-		return friend or nil
-	end
-	return nil
+universal.Options = {
+	GetCategory = getcategory,
+	Get = getoption,
+	Value = optionvalue,
+	Enabled = optionenabled,
+	ListContains = listcontains,
+	Color = getcoloroption
+}
+
+local players = {}
+
+function players.Local()
+	return lplr or playersService.LocalPlayer
 end
 
-local function isTarget(plr)
-	if not plr then return nil end
-	return listHas('Targets', 'ListEnabled', plr.Name) or nil
+function players.All()
+	return playersService:GetPlayers()
+end
+
+function players.Character(plr)
+	plr = plr or players.Local()
+	return plr and plr.Character
+end
+
+function players.Humanoid(plr)
+	local char = players.Character(plr)
+	return char and char:FindFirstChildWhichIsA('Humanoid')
+end
+
+function players.Root(plr)
+	local char = players.Character(plr)
+	return char and (char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('RootPart') or char.PrimaryPart)
+end
+
+function players.Alive(plr)
+	local hum = players.Humanoid(plr)
+	local root = players.Root(plr)
+	return hum and root and hum.Health > 0
+end
+
+function players.Team(plr)
+	plr = plr or players.Local()
+	return plr and plr.Team
+end
+
+function players.SameTeam(a, b)
+	a = a or players.Local()
+	b = b or players.Local()
+	if not a or not b then return false end
+	if not a.Team or not b.Team then return false end
+	return a.Team == b.Team
+end
+
+function players.Find(name)
+	if not name or name == '' then return nil end
+	name = tostring(name):lower()
+
+	for _, plr in ipairs(playersService:GetPlayers()) do
+		if plr.Name:lower():sub(1, #name) == name then
+			return plr
+		end
+		if plr.DisplayName:lower():sub(1, #name) == name then
+			return plr
+		end
+	end
+end
+
+function players.Distance(a, b)
+	local rootA = typeof(a) == 'Instance' and a:IsA('Player') and players.Root(a) or a
+	local rootB = typeof(b) == 'Instance' and b:IsA('Player') and players.Root(b) or b
+
+	if typeof(rootA) == 'Instance' and rootA:IsA('BasePart') then
+		rootA = rootA.Position
+	end
+
+	if typeof(rootB) == 'Instance' and rootB:IsA('BasePart') then
+		rootB = rootB.Position
+	end
+
+	if typeof(rootA) ~= 'Vector3' or typeof(rootB) ~= 'Vector3' then
+		return math.huge
+	end
+
+	return (rootA - rootB).Magnitude
+end
+
+function players.OnCharacter(plr, func, moduleMaid)
+	plr = plr or players.Local()
+	if not plr then return end
+
+	local localMaid = moduleMaid or maid.new()
+
+	if plr.Character then
+		task.defer(func, plr.Character, plr)
+	end
+
+	localMaid:Give(plr.CharacterAdded:Connect(function(char)
+		func(char, plr)
+	end))
+
+	return localMaid
+end
+
+function players.Track(func, moduleMaid)
+	local localMaid = moduleMaid or maid.new()
+
+	for _, plr in ipairs(playersService:GetPlayers()) do
+		task.defer(func, plr)
+	end
+
+	localMaid:Give(playersService.PlayerAdded:Connect(func))
+	return localMaid
+end
+
+universal.Players = players
+
+local camera = {}
+
+function camera.Get()
+	return workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
+end
+
+function camera.WorldToScreen(position)
+	local cam = camera.Get()
+	if not cam then
+		return Vector2.zero, false, 0
+	end
+
+	local point, visible = cam:WorldToViewportPoint(position)
+	return Vector2.new(point.X, point.Y), visible and point.Z > 0, point.Z
+end
+
+function camera.ScreenDistance(position, screenPoint)
+	local pos, visible = camera.WorldToScreen(position)
+	if not visible then
+		return math.huge, false
+	end
+
+	screenPoint = screenPoint or inputService:GetMouseLocation()
+	return (pos - screenPoint).Magnitude, true
+end
+
+function camera.InFov(position, radius, screenPoint)
+	local dist, visible = camera.ScreenDistance(position, screenPoint)
+	return visible and dist <= radius, dist
+end
+
+universal.Camera = camera
+
+local world = {}
+
+function world.FindFirstPath(root, path)
+	root = root or game
+	local pointer = root
+
+	for _, part in ipairs(splitpath(path)) do
+		pointer = pointer and pointer:FindFirstChild(part)
+		if not pointer then
+			return nil
+		end
+	end
+
+	return pointer
+end
+
+function world.BasePart(obj)
+	if not obj then return nil end
+	if obj:IsA('BasePart') then return obj end
+	return obj:FindFirstChildWhichIsA('BasePart', true)
+end
+
+function world.FindBall(names)
+	names = names or {'Ball', 'Football', 'SoccerBall'}
+
+	local temp = workspace:FindFirstChild('Temp')
+	for _, name in ipairs(names) do
+		local ball = temp and temp:FindFirstChild(name)
+		if ball then return ball end
+
+		ball = workspace:FindFirstChild(name)
+		if ball then return ball end
+	end
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA('BasePart') then
+			local lower = obj.Name:lower()
+			if lower == 'ball' or lower:find('ball') then
+				return obj
+			end
+		end
+	end
+end
+
+function world.RootFolder(name)
+	name = name or 'UniversalObjects'
+	local folder = workspace:FindFirstChild(name)
+	if not folder then
+		folder = Instance.new('Folder')
+		folder.Name = name
+		folder.Parent = workspace
+	end
+	return folder
+end
+
+function world.Raycast(origin, direction, ignore)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = ignore or {}
+	params.IgnoreWater = true
+	return workspace:Raycast(origin, direction, params)
+end
+
+universal.World = world
+
+local physics = {}
+
+function physics.ExternalAcceleration(part)
+	if not part or not part:IsA('BasePart') then
+		return Vector3.zero
+	end
+
+	local acceleration = Vector3.zero
+
+	for _, obj in ipairs(part:GetDescendants()) do
+		if obj:IsA('VectorForce') and obj.Enabled then
+			local force = obj.Force
+
+			if obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment0 and obj.Attachment0 then
+				force = obj.Attachment0.WorldCFrame:VectorToWorldSpace(force)
+			elseif obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment1 and obj.Attachment1 then
+				force = obj.Attachment1.WorldCFrame:VectorToWorldSpace(force)
+			end
+
+			if part.AssemblyMass > 0 then
+				acceleration += force / part.AssemblyMass
+			end
+		end
+	end
+
+	return acceleration
+end
+
+function physics.Step(position, velocity, acceleration, dt)
+	velocity += acceleration * dt
+	position += velocity * dt
+	return position, velocity
+end
+
+function physics.Predict(part, config)
+	if not part then return {} end
+	part = world.BasePart(part)
+	if not part then return {} end
+
+	config = config or {}
+
+	local dt = config.Step or 0.025
+	local steps = config.Steps or 80
+	local radius = config.Radius or math.max(part.Size.X, part.Size.Y, part.Size.Z) * 0.5
+	local elasticity = config.Elasticity or 0.65
+	local floorY = config.FloorY
+	local drag = config.Drag or 0
+	local useRaycast = config.Raycast == true
+	local ignore = config.Ignore or {part}
+
+	local gravity = Vector3.new(0, -workspace.Gravity, 0)
+	local external = physics.ExternalAcceleration(part)
+	local position = part.Position
+	local velocity = part.AssemblyLinearVelocity
+	local points = {}
+
+	for i = 1, steps do
+		local oldPosition = position
+		local acceleration = gravity + external
+
+		if drag > 0 then
+			acceleration -= velocity * drag
+		end
+
+		position, velocity = physics.Step(position, velocity, acceleration, dt)
+
+		if useRaycast then
+			local result = world.Raycast(oldPosition, position - oldPosition, ignore)
+			if result then
+				position = result.Position + result.Normal * radius
+				velocity = velocity - 2 * velocity:Dot(result.Normal) * result.Normal
+				velocity *= elasticity
+			end
+		elseif floorY then
+			local minY = floorY + radius
+			if position.Y < minY then
+				position = Vector3.new(position.X, minY, position.Z)
+				velocity = Vector3.new(velocity.X, math.abs(velocity.Y) * elasticity, velocity.Z)
+			end
+		end
+
+		points[i] = {
+			Position = position,
+			Velocity = velocity,
+			Time = i * dt
+		}
+	end
+
+	return points
+end
+
+function physics.CrossingPlane(points, cframe, axis)
+	axis = axis or 'Z'
+	if not points or #points < 2 then return nil end
+
+	local last = cframe:PointToObjectSpace(points[1].Position)[axis]
+
+	for i = 2, #points do
+		local current = cframe:PointToObjectSpace(points[i].Position)[axis]
+
+		if last == 0 or current == 0 or last * current <= 0 then
+			local a = points[i - 1]
+			local b = points[i]
+			local denom = math.abs(last - current)
+			local alpha = denom > 0.0001 and math.abs(last) / denom or 0
+			local position = a.Position:Lerp(b.Position, alpha)
+			local time = a.Time + (b.Time - a.Time) * alpha
+
+			return {
+				Position = position,
+				Time = time,
+				Relative = cframe:PointToObjectSpace(position),
+				Index = i
+			}
+		end
+
+		last = current
+	end
+end
+
+universal.Physics = physics
+
+local visuals = {}
+
+function visuals.Root()
+	return world.RootFolder('UniversalVisuals')
+end
+
+function visuals.Folder(name)
+	local root = visuals.Root()
+	local folder = root:FindFirstChild(name)
+
+	if not folder then
+		folder = Instance.new('Folder')
+		folder.Name = name
+		folder.Parent = root
+	end
+
+	return folder
+end
+
+function visuals.Part(folder, name, props)
+	folder = typeof(folder) == 'Instance' and folder or visuals.Folder(tostring(folder or 'Default'))
+
+	local part = folder:FindFirstChild(name)
+	if not part then
+		part = Instance.new('Part')
+		part.Name = name
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.CastShadow = false
+		part.Parent = folder
+	end
+
+	for prop, value in pairs(props or {}) do
+		pcall(function()
+			part[prop] = value
+		end)
+	end
+
+	return part
+end
+
+function visuals.Marker(folder, name, position, size, color, transparency)
+	return visuals.Part(folder, name, {
+		Shape = Enum.PartType.Ball,
+		Material = Enum.Material.Neon,
+		Size = Vector3.new(size or 0.35, size or 0.35, size or 0.35),
+		Color = color or Color3.new(1, 1, 1),
+		Transparency = transparency or 0,
+		Position = position
+	})
+end
+
+function visuals.Line(folder, name, a, b, thickness, color, transparency)
+	local distance = (a - b).Magnitude
+	local middle = a:Lerp(b, 0.5)
+
+	return visuals.Part(folder, name, {
+		Material = Enum.Material.Neon,
+		Size = Vector3.new(thickness or 0.08, thickness or 0.08, distance),
+		Color = color or Color3.new(1, 1, 1),
+		Transparency = transparency or 0,
+		CFrame = CFrame.lookAt(middle, b)
+	})
+end
+
+function visuals.Clear(folder)
+	if typeof(folder) == 'Instance' then
+		folder:ClearAllChildren()
+	end
+end
+
+function visuals.Destroy(name)
+	local root = workspace:FindFirstChild('UniversalVisuals')
+	local folder = root and root:FindFirstChild(name)
+	if folder then
+		folder:Destroy()
+	end
+end
+
+universal.Visuals = visuals
+
+local modulelib = {}
+
+function modulelib.Create(categoryName, config)
+	config = config or {}
+
+	local category = getcategory(categoryName)
+	if not category or type(category.CreateModule) ~= 'function' then
+		error('missing category '..tostring(categoryName))
+	end
+
+	local moduleMaid = maid.new()
+	local userFunction = config.Function or function() end
+	local name = config.Name or 'Unnamed'
+
+	config.Function = function(callback)
+		moduleMaid:Clean()
+		universal.Diagnostics.Toggles += 1
+		universal.Diagnostics.LastToggle = {
+			Name = name,
+			State = callback,
+			Clock = os.clock()
+		}
+
+		runtimeStore:Set('modules.'..name..'.enabled', callback == true)
+		return userFunction(callback, moduleMaid, universal)
+	end
+
+	local created = category:CreateModule(config)
+	universal.Modules[name] = created
+	universal.Diagnostics.ModulesCreated += 1
+	universal.Diagnostics.LastModule = name
+
+	runtimeStore:Set('modules.'..name, {
+		category = categoryName,
+		enabled = false,
+		created = os.clock()
+	})
+
+	if created and type(created.Clean) == 'function' then
+		created:Clean(function()
+			moduleMaid:Destroy()
+		end)
+	end
+
+	return created, moduleMaid
+end
+
+function modulelib.Get(name)
+	return universal.Modules[name]
+end
+
+function modulelib.Enabled(name)
+	local mod = universal.Modules[name]
+	return mod and mod.Enabled or false
+end
+
+function modulelib.Toggle(name, state)
+	local mod = universal.Modules[name]
+	if not mod or type(mod.Toggle) ~= 'function' then return false end
+	if state == nil or mod.Enabled ~= state then
+		mod:Toggle()
+	end
+	return true
+end
+
+universal.Module = modulelib
+
+local session = universal.Session or {
+	Objects = {},
+	Changed = signal.new()
+}
+
+function session:Add(name, startValue, formatter, saved)
+	formatter = formatter or function(value)
+		return value
+	end
+
+	self.Objects[name] = {
+		Value = startValue or 0,
+		Formatter = formatter,
+		Saved = saved == nil or saved,
+		Started = os.clock()
+	}
+
+	local object = self.Objects[name]
+
+	return {
+		Increment = function(_, amount)
+			object.Value += amount or 1
+			self.Changed:Fire(name, object.Value)
+		end,
+		Set = function(_, value)
+			object.Value = value
+			self.Changed:Fire(name, object.Value)
+		end,
+		Get = function()
+			return object.Value
+		end,
+		Format = function()
+			return object.Formatter(object.Value)
+		end
+	}
+end
+
+function session:AddItem(name, startValue, formatter, saved)
+	return self:Add(name, startValue, formatter, saved)
+end
+
+function session:Get(name)
+	return self.Objects[name]
+end
+
+function session:Format(name)
+	local object = self.Objects[name]
+	if not object then return '' end
+	return object.Formatter(object.Value)
+end
+
+universal.Session = session
+
+if not session.Objects['Time Played'] then
+	session:Add('Time Played', os.clock(), function(value)
+		return os.date('!%X', math.floor(os.clock() - value))
+	end)
+end
+
+vape.Libraries.sessioninfo = session
+
+local bind = {}
+
+function bind.Render(name, priority, func, moduleMaid)
+	local localMaid = moduleMaid or maid.new()
+	priority = priority or Enum.RenderPriority.Last.Value
+
+	runService:BindToRenderStep(name, priority, func)
+
+	localMaid:Give(function()
+		pcall(function()
+			runService:UnbindFromRenderStep(name)
+		end)
+	end)
+
+	return localMaid
+end
+
+function bind.Heartbeat(func, moduleMaid)
+	local localMaid = moduleMaid or maid.new()
+	localMaid:Give(runService.Heartbeat:Connect(func))
+	return localMaid
+end
+
+function bind.Stepped(func, moduleMaid)
+	local localMaid = moduleMaid or maid.new()
+	localMaid:Give(runService.Stepped:Connect(func))
+	return localMaid
+end
+
+function bind.InputBegan(func, moduleMaid)
+	local localMaid = moduleMaid or maid.new()
+	localMaid:Give(inputService.InputBegan:Connect(func))
+	return localMaid
+end
+
+function bind.InputEnded(func, moduleMaid)
+	local localMaid = moduleMaid or maid.new()
+	localMaid:Give(inputService.InputEnded:Connect(func))
+	return localMaid
+end
+
+universal.Bind = bind
+
+local mathlib = {}
+
+function mathlib.ClampVector(vector, maxMagnitude)
+	if vector.Magnitude > maxMagnitude then
+		return vector.Unit * maxMagnitude
+	end
+	return vector
+end
+
+function mathlib.Map(value, inMin, inMax, outMin, outMax)
+	if inMax - inMin == 0 then return outMin end
+	local alpha = (value - inMin) / (inMax - inMin)
+	return outMin + (outMax - outMin) * alpha
+end
+
+function mathlib.Lerp(a, b, t)
+	return a + (b - a) * math.clamp(t, 0, 1)
+end
+
+function mathlib.ExpDecay(current, target, speed, dt)
+	return target + (current - target) * math.exp(-speed * dt)
+end
+
+function mathlib.Flatten(vector)
+	return Vector3.new(vector.X, 0, vector.Z)
+end
+
+function mathlib.SafeUnit(vector, fallback)
+	if vector.Magnitude < 0.0001 then
+		return fallback or Vector3.zero
+	end
+	return vector.Unit
+end
+
+universal.Math = mathlib
+
+local tablelib = {}
+
+function tablelib.Merge(a, b)
+	local result = deepcopy(a or {})
+	for k, v in pairs(b or {}) do
+		if type(v) == 'table' and type(result[k]) == 'table' then
+			result[k] = tablelib.Merge(result[k], v)
+		else
+			result[k] = deepcopy(v)
+		end
+	end
+	return result
+end
+
+function tablelib.Count(tbl)
+	return tablecount(tbl)
+end
+
+function tablelib.Keys(tbl)
+	local keys = {}
+	for k in pairs(tbl or {}) do
+		table.insert(keys, k)
+	end
+	return keys
+end
+
+function tablelib.Values(tbl)
+	local values = {}
+	for _, v in pairs(tbl or {}) do
+		table.insert(values, v)
+	end
+	return values
+end
+
+function tablelib.Clear(tbl)
+	if type(tbl) == 'table' then
+		table.clear(tbl)
+	end
+end
+
+universal.Table = tablelib
+
+local text = {}
+
+function text.StripRich(str)
+	return removeTags(str)
+end
+
+function text.StartsWith(str, prefix)
+	str = tostring(str or '')
+	prefix = tostring(prefix or '')
+	return str:sub(1, #prefix) == prefix
+end
+
+function text.Trim(str)
+	return tostring(str or ''):match('^%s*(.-)%s*$')
+end
+
+function text.ToHex(color)
+	if typeof(color) ~= 'Color3' then
+		return 'FFFFFF'
+	end
+	return color:ToHex()
+end
+
+universal.Text = text
+
+local config = universal:GetStore('config', {
+	debug = false,
+	visuals = {
+		folder = 'UniversalVisuals'
+	},
+	prediction = {
+		step = 0.025,
+		steps = 80,
+		elasticity = 0.65
+	}
+})
+
+universal.Config = config
+
+function universal:Debug(...)
+	return nil
 end
 
 local whitelist = {
@@ -268,7 +1438,38 @@ vape.Libraries.whitelist = whitelist
 vape.Libraries.prediction = prediction
 vape.Libraries.hash = hash
 
+local function optionEnabled(categoryName, optionName)
+	return optionenabled(categoryName, optionName)
+end
+
+local function listHas(categoryName, listName, value)
+	return listcontains(categoryName, listName, value)
+end
+
+local function getColorOption(categoryName, optionName, fallback)
+	return getcoloroption(categoryName, optionName, fallback)
+end
+
+local function isFriend(plr, recolor)
+	if not plr then return nil end
+	if optionEnabled('Friends', 'Use friends') then
+		local friend = listHas('Friends', 'ListEnabled', plr.Name)
+		if recolor then
+			friend = friend and optionEnabled('Friends', 'Recolor visuals')
+		end
+		return friend or nil
+	end
+	return nil
+end
+
+local function isTarget(plr)
+	if not plr then return nil end
+	return listHas('Targets', 'ListEnabled', plr.Name) or nil
+end
+
 run(function()
+	if not entitylib then return end
+
 	entitylib.getUpdateConnections = function(ent)
 		if not ent then return {} end
 		local hum = ent.Humanoid
@@ -365,27 +1566,8 @@ run(function()
 	if entitylib and entitylib.start then
 		entitylib.start()
 	else
-		warn('[universal.lua] entitylib.start missing')
+		warnonce('entity_start_missing', 'entitylib.start missing')
 	end
-end)
-
-vape.Libraries.sessioninfo = {
-	Objects = {},
-	AddItem = function(self, name, startvalue, func, saved)
-		func, saved = func or function(val) return val end, saved == nil or saved
-		self.Objects[name] = {Function = func, Saved = saved, Value = startvalue or 0, Index = getTableSize and getTableSize(self.Objects) + 2 or 2}
-		return {
-			Increment = function(_, val)
-				self.Objects[name].Value += (val or 1)
-			end,
-			Get = function()
-				return self.Objects[name].Value
-			end
-		}
-	end
-}
-vape.Libraries.sessioninfo:AddItem('Time Played', os.clock(), function(value)
-	return os.date('!%X', math.floor(os.clock() - value))
 end)
 
 local tpSwitch = false
@@ -396,6 +1578,125 @@ if vape.Clean and lplr then
 			queue_on_teleport("shared.vapeserverhoplist = ''\nshared.vapeserverhopprevious = '"..game.JobId.."'")
 		end
 	end))
+end
+
+
+
+local hitboxExpansion = universal.HitboxExpansion or {
+	Wrapped = {},
+	State = {
+		Ball = false,
+		Player = false,
+		All = false,
+		BallMultiplier = 1.35,
+		PlayerMultiplier = 1.35,
+		AllMultiplier = 1.35
+	}
+}
+universal.HitboxExpansion = hitboxExpansion
+
+function hitboxExpansion:GetTarget(module)
+	if typeof(module) ~= 'Instance' or not module:IsA('ModuleScript') then return end
+
+	local name = module.Name
+	local fullName = module:GetFullName()
+
+	if name == 'HitboxHandlerPlayers' or fullName:find('HitboxHandlerPlayers') then
+		return 'Player'
+	end
+
+	if name == 'HitboxHandler' or fullName:find('HitboxHandler') then
+		return 'Ball'
+	end
+end
+
+function hitboxExpansion:GetMultiplier(target)
+	if self.State.All then
+		return self.State.AllMultiplier
+	end
+
+	if target == 'Player' then
+		return self.State.Player and self.State.PlayerMultiplier or nil
+	end
+
+	return self.State.Ball and self.State.BallMultiplier or nil
+end
+
+function hitboxExpansion:CopyConfig(config, multiplier)
+	local newconfig = {}
+
+	for i, v in pairs(config) do
+		newconfig[i] = v
+	end
+
+	if typeof(newconfig.size) == 'Vector3' or type(newconfig.size) == 'number' then
+		newconfig.size = newconfig.size * multiplier
+	end
+
+	return newconfig
+end
+
+function hitboxExpansion:Patch(module, target)
+	if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
+	if self.Wrapped[module] then return end
+
+	local original = module.Create
+	self.Wrapped[module] = original
+
+	module.Create = function(config, ...)
+		local multiplier = hitboxExpansion:GetMultiplier(target)
+
+		if multiplier and type(config) == 'table' and config.size then
+			config = hitboxExpansion:CopyConfig(config, multiplier)
+		end
+
+		return original(config, ...)
+	end
+end
+
+function hitboxExpansion:FindModule(name)
+	local modules = replicatedStorage:FindFirstChild('Modules')
+	local module = modules and modules:FindFirstChild(name, true)
+
+	if module and module:IsA('ModuleScript') then
+		return module
+	end
+end
+
+function hitboxExpansion:Scan()
+	for _, name in {'HitboxHandler', 'HitboxHandlerPlayers'} do
+		local module = self:FindModule(name)
+		local target = module and self:GetTarget(module)
+
+		if target then
+			local suc, result = pcall(function()
+				return require(module)
+			end)
+
+			if suc then
+				self:Patch(result, target)
+			end
+		end
+	end
+end
+
+function hitboxExpansion:Refresh()
+	self:Scan()
+end
+
+function hitboxExpansion:Restore()
+	for module, original in pairs(self.Wrapped) do
+		if type(module) == 'table' and type(original) == 'function' then
+			module.Create = original
+		end
+		self.Wrapped[module] = nil
+	end
+end
+
+if vape.Clean then
+	vape:Clean(function()
+		hitboxExpansion:Restore()
+	end)
 end
 
 run(function()
@@ -487,7 +1788,6 @@ run(function()
         end
     })
 end)
-
 
 run(function()
 	local RunService = game:GetService("RunService")
@@ -846,6 +2146,123 @@ run(function()
 end)
 
 run(function()
+	local VirtualInputManager = game:GetService("VirtualInputManager")
+	local Players = game:GetService("Players")
+	local Workspace = game:GetService("Workspace")
+	local UserInputService = game:GetService("UserInputService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local LocalPlayer = Players.LocalPlayer
+	local AutoTrap
+	local StopGround = nil
+	local AnimationTrack = nil
+	local AnimationPlayed = false
+	local CharAddedConnection = nil
+	
+	local function setupAnimation()
+		local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid then return end
+		local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator")
+		if animator then
+			local animation = Instance.new("Animation")
+			animation.AnimationId = "rbxassetid://15365316903"
+			AnimationTrack = animator:LoadAnimation(animation)
+		end
+	end
+	
+	AutoTrap = vape.Categories.Blatant:CreateModule({
+		Name = 'AutoTrap',
+		Function = function(callback)
+			if callback then
+				AnimationPlayed = false
+				setupAnimation()
+				
+				if CharAddedConnection then
+					CharAddedConnection:Disconnect()
+					CharAddedConnection = nil
+				end
+				CharAddedConnection = LocalPlayer.CharacterAdded:Connect(function()
+					task.wait(0.5)
+					setupAnimation()
+				end)
+				
+				while AutoTrap.Enabled do
+					task.wait()
+					
+					local ball = Workspace:FindFirstChild("Temp") and Workspace.Temp:FindFirstChild("Ball")
+					if not ball then continue end
+					
+					if ball:FindFirstChild("PossessionHighlight") then
+						AnimationPlayed = false
+						continue
+					end
+					
+					local char = LocalPlayer.Character
+					if not char then continue end
+					
+					local hrp = char:FindFirstChild("HumanoidRootPart")
+					local humanoid = char:FindFirstChildOfClass("Humanoid")
+					if not hrp or not humanoid then continue end
+					
+					local ballVelocity = ball.Velocity
+					local ballSpeed = ballVelocity.Magnitude
+					local charPos = hrp.Position
+					local ballPos = ball.Position
+					
+					local rayOrigin = ballPos
+					local rayDirection = Vector3.new(0, -1, 0)
+					local raycastParams = RaycastParams.new()
+					raycastParams.FilterDescendantsInstances = {ball}
+					raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+					local result = Workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+					if not result or result.Material == Enum.Material.Air then continue end
+					
+					local ballDirection = ballVelocity.Unit
+					local playerToBall = charPos - ballPos
+					local projection = ballDirection * (playerToBall:Dot(ballDirection))
+					local closestPoint = ballPos + projection
+					local distanceToLine = (charPos - closestPoint).Magnitude
+					local trapDistance = math.max(7, math.floor(ballSpeed / 9.2))
+					
+					if ballVelocity:Dot(playerToBall) > 0 and distanceToLine <= 5 then
+						local predictedBallPos = ballPos + ballVelocity.Unit * trapDistance
+						if (charPos - predictedBallPos).Magnitude <= trapDistance then
+							if not StopGround then
+								local GetKey = ReplicatedStorage.Packages.Knit.Services.KeyHandlerService.RF.GetKey
+								local success, res = pcall(function()
+									return GetKey:InvokeServer("StopBall_GroundBackup")
+								end)
+								if success then
+									StopGround = res
+								else
+									continue
+								end
+							end
+							
+							if StopGround then
+								StopGround:FireServer(ball, Vector3.new(0, 0, 0), "Right")
+								if not AnimationPlayed and AnimationTrack and not AnimationTrack.IsPlaying then
+									AnimationTrack:Play()
+									AnimationPlayed = true
+								end
+							end
+						end
+					end
+				end
+			else
+				AnimationPlayed = false
+				
+				if CharAddedConnection then
+					CharAddedConnection:Disconnect()
+					CharAddedConnection = nil
+				end
+			end
+		end,
+		Tooltip = 'Automatically trap theb ball'
+	})
+end)
+
+run(function()
 	local Players = game:GetService("Players")
 	local LocalPlayer = Players.LocalPlayer
 	
@@ -1188,28 +2605,24 @@ run(function()
 	local Players = game:GetService("Players")
 	
 	local Rejoin
-	local running = false
 	
 	Rejoin = vape.Categories.Utility:CreateModule({
 		Name = 'Rejoin',
 		Function = function(callback)
-			if not callback or running then return end
-			running = true
-			
-			task.defer(function()
+			if callback then
+				TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Players.LocalPlayer)
+				task.wait(1)
 				if Rejoin.Enabled then
 					Rejoin:Toggle()
 				end
-				running = false
-			end)
-			
-			pcall(function()
-				TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Players.LocalPlayer)
-			end)
+			end
 		end,
 		Tooltip = 'Rejoins the current server'
 	})
-end)																			
+	
+	Rejoin:Clean(function()
+	end)
+end)
 
 run(function()
 	local Players = game:GetService('Players')
@@ -1699,7 +3112,7 @@ run(function()
 		OriginalCollision = {}
 	end)
 end)
-																																
+
 run(function()
 	local Disabler
 	
@@ -1725,7 +3138,7 @@ run(function()
 		Tooltip = 'Disables GetPropertyChangedSignal detections for movement'
 	})
 end)
-	
+
 run(function()
 	local Panic = vape.Categories.Utility:CreateModule({
 		Name = 'Panic',
@@ -1828,7 +3241,8 @@ run(function()
 		local up = right:Cross(smoothLook).Unit
 		gameCamera.CFrame = CFrame.fromMatrix(camPos, right, up, -smoothLook)
 	end
-		                       
+	
+	                       
 	local function createFOVCircle()
 		if FOVCircle then return end
 		if not showFOV then return end
@@ -2034,14 +3448,6 @@ run(function()
 	local playerconnections = {}
 	local objects = {}
 
-	local function isenabled()
-		return skillesp and skillesp.Enabled
-	end
-
-	local function safeenabled(option)
-		return option and option.Enabled or false
-	end
-
 	local function getskill(plr)
 		local data = plr:FindFirstChild('Data')
 		data = data and data:FindFirstChild('SelectedSkill')
@@ -2050,23 +3456,15 @@ run(function()
 
 	local function remove(plr)
 		local obj = objects[plr]
-		if not obj then return end
-
-		if obj.Text then
-			pcall(function()
-				obj.Text.Visible = false
+		if obj then
+			if obj.Text then
 				obj.Text:Remove()
-			end)
-		end
-
-		if obj.Background then
-			pcall(function()
-				obj.Background.Visible = false
+			end
+			if obj.Background then
 				obj.Background:Remove()
-			end)
+			end
+			objects[plr] = nil
 		end
-
-		objects[plr] = nil
 	end
 
 	local function create(plr)
@@ -2095,47 +3493,26 @@ run(function()
 		return objects[plr]
 	end
 
-	local function hide(plr)
-		local obj = objects[plr]
-		if not obj then return end
-
-		if obj.Text then
-			obj.Text.Visible = false
-		end
-
-		if obj.Background then
-			obj.Background.Visible = false
-		end
-	end
-
 	local function updateplayer(plr)
 		if plr == lplr then return end
 
-		if not isenabled() then
-			hide(plr)
-			return
-		end
+		local obj = objects[plr] or create(plr)
+		if not obj then return end
 
 		local char = plr.Character
 		local head = char and char:FindFirstChild('Head')
 		local camera = workspace.CurrentCamera
 
-		if not char or not head or not camera then
-			hide(plr)
+		if not char or not head or not camera or (teamcheck.Enabled and lplr.Team and plr.Team and lplr.Team == plr.Team) then
+			obj.Text.Visible = false
+			obj.Background.Visible = false
 			return
 		end
-
-		if safeenabled(teamcheck) and lplr.Team and plr.Team and lplr.Team == plr.Team then
-			hide(plr)
-			return
-		end
-
-		local obj = objects[plr] or create(plr)
-		if not obj then return end
 
 		local pos, visible = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.2, 0))
 		if not visible or pos.Z <= 0 then
-			hide(plr)
+			obj.Text.Visible = false
+			obj.Background.Visible = false
 			return
 		end
 
@@ -2144,7 +3521,7 @@ run(function()
 		obj.Text.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2), pos.Y - 20)
 		obj.Text.Visible = true
 
-		if safeenabled(background) then
+		if background.Enabled then
 			obj.Background.Size = Vector2.new(obj.Text.TextBounds.X + 8, obj.Text.TextBounds.Y + 4)
 			obj.Background.Position = Vector2.new(pos.X - (obj.Text.TextBounds.X / 2) - 4, pos.Y - 22)
 			obj.Background.Visible = true
@@ -2154,8 +3531,6 @@ run(function()
 	end
 
 	local function update()
-		if not isenabled() then return end
-
 		for _, plr in playersService:GetPlayers() do
 			if plr ~= lplr then
 				updateplayer(plr)
@@ -2171,12 +3546,8 @@ run(function()
 
 	local function bind(plr)
 		if plr == lplr or playerconnections[plr] then return end
-
 		playerconnections[plr] = plr.CharacterAdded:Connect(function()
 			remove(plr)
-			if isenabled() then
-				task.defer(updateplayer, plr)
-			end
 		end)
 	end
 
@@ -2186,7 +3557,6 @@ run(function()
 			conn:Disconnect()
 			playerconnections[plr] = nil
 		end
-
 		remove(plr)
 	end
 
@@ -2201,60 +3571,33 @@ run(function()
 			connection:Disconnect()
 			connection = nil
 		end
-
 		if addedconnection then
 			addedconnection:Disconnect()
 			addedconnection = nil
 		end
-
 		if removingconnection then
 			removingconnection:Disconnect()
 			removingconnection = nil
 		end
-
 		for plr, conn in playerconnections do
 			conn:Disconnect()
 			playerconnections[plr] = nil
 		end
-
 		clear()
-	end
-
-	local function start()
-		stop()
-
-		if not Drawing then return end
-
-		for _, plr in playersService:GetPlayers() do
-			bind(plr)
-		end
-
-		addedconnection = playersService.PlayerAdded:Connect(function(plr)
-			bind(plr)
-			if isenabled() then
-				task.defer(updateplayer, plr)
-			end
-		end)
-
-		removingconnection = playersService.PlayerRemoving:Connect(unbind)
-
-		connection = runService.RenderStepped:Connect(function()
-			if not isenabled() then
-				stop()
-				return
-			end
-
-			update()
-		end)
-
-		update()
 	end
 
 	skillesp = vape.Categories.Render:CreateModule({
 		Name = 'SkillESP',
 		Function = function(callback)
 			if callback then
-				start()
+				for _, plr in playersService:GetPlayers() do
+					bind(plr)
+				end
+
+				addedconnection = playersService.PlayerAdded:Connect(bind)
+				removingconnection = playersService.PlayerRemoving:Connect(unbind)
+				connection = runService.RenderStepped:Connect(update)
+				update()
 			else
 				stop()
 			end
@@ -2265,23 +3608,7 @@ run(function()
 	teamcheck = skillesp:CreateToggle({
 		Name = 'Team Check',
 		Default = false,
-		Function = function()
-			if isenabled() then
-				update()
-			end
-		end,
 		Tooltip = 'Only show enemy skills'
-	})
-
-	background = skillesp:CreateToggle({
-		Name = 'Show Background',
-		Default = true,
-		Function = function()
-			if isenabled() then
-				update()
-			end
-		end,
-		Tooltip = 'Show background behind skill text'
 	})
 
 	coloroption = skillesp:CreateColorSlider({
@@ -2291,17 +3618,20 @@ run(function()
 		DefaultValue = 1,
 		Function = function(hue, sat, val)
 			textcolor = Color3.fromHSV(hue, sat, val)
-
-			if isenabled() then
-				update()
-			end
+			update()
 		end,
 		Tooltip = 'Color of the skill text'
 	})
 
+	background = skillesp:CreateToggle({
+		Name = 'Show Background',
+		Default = true,
+		Tooltip = 'Show background behind skill text'
+	})
+
 	skillesp:Clean(stop)
 end)
-																																			
+
 run(function()
     local Sprint
     local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -2342,211 +3672,6 @@ run(function()
     end)
 end)
 
-run(function()
-	shared.vapehbe = shared.vapehbe or {
-		wrapped = {},
-		state = {
-			ball = false,
-			player = false,
-			all = false,
-			ballmultiplier = 1.35,
-			playermultiplier = 1.35,
-			allmultiplier = 1.35
-		}
-	}
-
-	local replicatedstorage = game:GetService('ReplicatedStorage')
-	local hbe = shared.vapehbe
-
-	local function gettarget(module)
-		if typeof(module) ~= 'Instance' then return end
-		if not module:IsA('ModuleScript') then return end
-
-		local name = module.Name
-		local fullname = module:GetFullName()
-
-		if name == 'HitboxHandlerPlayers' or fullname:find('HitboxHandlerPlayers') then
-			return 'player'
-		end
-
-		if name == 'HitboxHandler' or fullname:find('HitboxHandler') then
-			return 'ball'
-		end
-	end
-
-	local function getmultiplier(target)
-		if hbe.state.all then
-			return hbe.state.allmultiplier
-		end
-
-		if target == 'player' then
-			return hbe.state.player and hbe.state.playermultiplier or nil
-		end
-
-		return hbe.state.ball and hbe.state.ballmultiplier or nil
-	end
-
-	local function patchmodule(module, target)
-		if type(module) ~= 'table' or type(module.Create) ~= 'function' then return end
-		if hbe.wrapped[module] then return end
-
-		local original = module.Create
-		hbe.wrapped[module] = original
-
-		module.Create = function(config, ...)
-			local multiplier = getmultiplier(target)
-
-			if multiplier and type(config) == 'table' and config.size then
-				config.size = config.size * multiplier
-			end
-
-			return original(config, ...)
-		end
-	end
-
-	local function scan()
-		for _, module in replicatedstorage:GetDescendants() do
-			local target = gettarget(module)
-
-			if target then
-				local suc, result = pcall(function()
-					return require(module)
-				end)
-
-				if suc then
-					patchmodule(result, target)
-				end
-			end
-		end
-	end
-
-	if not hbe.requirehooked then
-		hbe.requirehooked = true
-		hbe.oldrequire = require
-
-		require = function(module)
-			local result = hbe.oldrequire(module)
-			local target = gettarget(module)
-
-			if target then
-				patchmodule(result, target)
-			end
-
-			return result
-		end
-	end
-
-	hbe.scan = scan
-end)
-
-run(function()
-	local HitboxExtender
-	local SizeSlider
-	local hbe = shared.vapehbe
-	local multiplier = 1.35
-
-	HitboxExtender = vape.Categories.Blatant:CreateModule({
-		Name = 'HitboxExtender',
-		Function = function(callback)
-			hbe.state.ball = callback
-			hbe.state.ballmultiplier = multiplier
-			hbe.scan()
-		end,
-		Tooltip = 'Expands ball hitbox'
-	})
-
-	SizeSlider = HitboxExtender:CreateSlider({
-		Name = 'Multiplier',
-		Min = 1,
-		Max = 35,
-		Default = 13.5,
-		Decimal = 10,
-		Function = function(val)
-			multiplier = val / 10
-			hbe.state.ballmultiplier = multiplier
-		end,
-		Suffix = function(val)
-			return string.format('%.2fx', val / 10)
-		end
-	})
-
-	HitboxExtender:Clean(function()
-		hbe.state.ball = false
-	end)
-end)
-
-run(function()
-	local PhysicalReach
-	local SizeSlider
-	local hbe = shared.vapehbe
-	local multiplier = 1.35
-
-	PhysicalReach = vape.Categories.Blatant:CreateModule({
-		Name = 'PhysicalReach',
-		Function = function(callback)
-			hbe.state.player = callback
-			hbe.state.playermultiplier = multiplier
-			hbe.scan()
-		end,
-		Tooltip = 'Expands player hitboxes'
-	})
-
-	SizeSlider = PhysicalReach:CreateSlider({
-		Name = 'Multiplier',
-		Min = 1,
-		Max = 35,
-		Default = 13.5,
-		Decimal = 10,
-		Function = function(val)
-			multiplier = val / 10
-			hbe.state.playermultiplier = multiplier
-		end,
-		Suffix = function(val)
-			return string.format('%.2fx', val / 10)
-		end
-	})
-
-	PhysicalReach:Clean(function()
-		hbe.state.player = false
-	end)
-end)
-
-run(function()
-	local ALLHBE
-	local SizeSlider
-	local hbe = shared.vapehbe
-	local multiplier = 1.35
-
-	ALLHBE = vape.Categories.Blatant:CreateModule({
-		Name = 'ALLHBE',
-		Function = function(callback)
-			hbe.state.all = callback
-			hbe.state.allmultiplier = multiplier
-			hbe.scan()
-		end,
-		Tooltip = 'Expands hitbox size for easier hits'
-	})
-
-	SizeSlider = ALLHBE:CreateSlider({
-		Name = 'Multiplier',
-		Min = 1,
-		Max = 35,
-		Default = 13.5,
-		Decimal = 10,
-		Function = function(val)
-			multiplier = val / 10
-			hbe.state.allmultiplier = multiplier
-		end,
-		Suffix = function(val)
-			return string.format('%.2fx', val / 10)
-		end
-	})
-
-	ALLHBE:Clean(function()
-		hbe.state.all = false
-	end)
-end)
-																																								
 run(function()
     local HighJump
     local CategoryDropdown
@@ -2730,7 +3855,7 @@ run(function()
         CurrentMethod = "Velocity"
     end)
 end)
- 
+
 run(function()
 	local Players = game:GetService("Players")
 	local RunService = game:GetService("RunService")
@@ -3158,7 +4283,7 @@ run(function()
 		wHeldDuration = 0
 		speedActive = false
 	end)
-end)                                                                     
+end)
 
 run(function()
     local Tracksuit
@@ -4048,374 +5173,6 @@ run(function()
 end)
 
 run(function()
-	local runService = game:GetService('RunService')
-	local workspaceService = game:GetService('Workspace')
-
-	local Trajectories
-	local PredictionTime
-	local PathPoints
-	local UpdateRate
-	local BounceLimit
-	local FloorHeight
-	local BallRadius
-	local LineWidth
-	local LineColor
-	local BounceColor
-	local connection
-	local marker
-	local lastpoints = 0
-	local accumulator = 0
-	local parts = {}
-	local attachments = {}
-	local beams = {}
-
-	local function getcolor(option, fallback)
-		return option and Color3.fromHSV(option.Hue, option.Sat, option.Value) or fallback
-	end
-
-	local function clearvisuals()
-		for _, beam in beams do
-			beam:Destroy()
-		end
-		for _, part in parts do
-			part:Destroy()
-		end
-		if marker then
-			marker:Destroy()
-			marker = nil
-		end
-		table.clear(parts)
-		table.clear(attachments)
-		table.clear(beams)
-		lastpoints = 0
-	end
-
-	local function hidevisuals()
-		for _, beam in beams do
-			beam.Enabled = false
-		end
-		if marker then
-			marker.Transparency = 1
-		end
-	end
-
-	local function createpart(index)
-		local part = Instance.new('Part')
-		part.Name = 'TrajectoryPoint_'..index
-		part.Anchored = true
-		part.CanCollide = false
-		part.CanTouch = false
-		part.CanQuery = false
-		part.CastShadow = false
-		part.Transparency = 1
-		part.Size = Vector3.new(0.1, 0.1, 0.1)
-		part.Parent = workspaceService
-
-		local attachment = Instance.new('Attachment')
-		attachment.Parent = part
-
-		parts[index] = part
-		attachments[index] = attachment
-	end
-
-	local function createbeam(index)
-		local beam = Instance.new('Beam')
-		beam.Name = 'TrajectoryBeam_'..index
-		beam.Attachment0 = attachments[index]
-		beam.Attachment1 = attachments[index + 1]
-		beam.FaceCamera = true
-		beam.LightEmission = 1
-		beam.LightInfluence = 0
-		beam.Segments = 2
-		beam.Width0 = LineWidth.Value / 100
-		beam.Width1 = LineWidth.Value / 100
-		beam.Color = ColorSequence.new(getcolor(LineColor, Color3.fromRGB(255, 50, 50)))
-		beam.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0),
-			NumberSequenceKeypoint.new(1, 0.45)
-		})
-		beam.Enabled = false
-		beam.Parent = parts[index]
-		beams[index] = beam
-	end
-
-	local function makevisuals()
-		local amount = PathPoints.Value
-		if lastpoints == amount then return end
-
-		clearvisuals()
-
-		for i = 1, amount do
-			createpart(i)
-		end
-
-		for i = 1, amount - 1 do
-			createbeam(i)
-		end
-
-		marker = Instance.new('Part')
-		marker.Name = 'TrajectoryBounce'
-		marker.Anchored = true
-		marker.CanCollide = false
-		marker.CanTouch = false
-		marker.CanQuery = false
-		marker.CastShadow = false
-		marker.Shape = Enum.PartType.Block
-		marker.Material = Enum.Material.Neon
-		marker.Size = Vector3.new(3, 0.18, 3)
-		marker.Transparency = 1
-		marker.Color = getcolor(BounceColor, Color3.fromRGB(255, 50, 50))
-		marker.Parent = workspaceService
-
-		lastpoints = amount
-	end
-
-	local function updatecolors()
-		local linecolor = getcolor(LineColor, Color3.fromRGB(255, 50, 50))
-		local bouncecolor = getcolor(BounceColor, Color3.fromRGB(255, 50, 50))
-		local width = LineWidth.Value / 100
-
-		for _, beam in beams do
-			beam.Color = ColorSequence.new(linecolor)
-			beam.Width0 = width
-			beam.Width1 = width
-		end
-
-		if marker then
-			marker.Color = bouncecolor
-		end
-	end
-
-	local function findball()
-		local temp = workspaceService:FindFirstChild('Temp')
-		local ball = temp and temp:FindFirstChild('Ball') or workspaceService:FindFirstChild('Ball')
-
-		if ball and ball:IsA('BasePart') then
-			return ball
-		end
-
-		if ball and ball:IsA('Model') then
-			return ball.PrimaryPart or ball:FindFirstChildWhichIsA('BasePart', true)
-		end
-	end
-
-	local function getforceacceleration(ball)
-		local mass = math.max(ball.AssemblyMass, 0.001)
-		local acceleration = Vector3.zero
-
-		for _, obj in ball:GetDescendants() do
-			if obj:IsA('VectorForce') and obj.Enabled then
-				local force = obj.Force
-
-				if obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment0 and obj.Attachment0 then
-					force = obj.Attachment0.WorldCFrame:VectorToWorldSpace(force)
-				elseif obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment1 and obj.Attachment1 then
-					force = obj.Attachment1.WorldCFrame:VectorToWorldSpace(force)
-				end
-
-				acceleration += force / mass
-			end
-		end
-
-		return acceleration
-	end
-
-	local function simulate(ball)
-		local amount = PathPoints.Value
-		local steptime = math.clamp(PredictionTime.Value / math.max(amount, 1), 0.005, 0.08)
-		local floorheight = FloorHeight.Value
-		local radius = BallRadius.Value
-		local bounces = 0
-		local firstbounce
-		local points = {}
-		local position = ball.Position
-		local velocity = ball.AssemblyLinearVelocity
-		local gravity = Vector3.new(0, -workspaceService.Gravity, 0)
-		local acceleration = gravity + getforceacceleration(ball)
-
-		for i = 1, amount do
-			local oldposition = position
-			local oldvelocity = velocity
-
-			velocity += acceleration * steptime
-			position += velocity * steptime
-
-			if position.Y - radius <= floorheight then
-				local rayalpha = 0
-				local bottomold = oldposition.Y - radius
-				local bottomnew = position.Y - radius
-				local delta = bottomold - bottomnew
-
-				if math.abs(delta) > 0.0001 then
-					rayalpha = math.clamp((bottomold - floorheight) / delta, 0, 1)
-				end
-
-				local impact = oldposition:Lerp(position, rayalpha)
-				impact = Vector3.new(impact.X, floorheight + radius, impact.Z)
-				firstbounce = firstbounce or impact
-
-				if bounces < BounceLimit.Value then
-					bounces += 1
-					position = impact
-					velocity = Vector3.new(oldvelocity.X, -velocity.Y * 0.7, oldvelocity.Z)
-				else
-					position = impact
-					velocity = Vector3.new(velocity.X, 0, velocity.Z)
-				end
-			end
-
-			points[i] = position
-		end
-
-		return points, firstbounce
-	end
-
-	local function update()
-		makevisuals()
-		updatecolors()
-
-		local ball = findball()
-		if not ball then
-			hidevisuals()
-			return
-		end
-
-		local points, bounce = simulate(ball)
-
-		for i = 1, lastpoints do
-			local point = points[i]
-			if point and parts[i] then
-				parts[i].Position = point
-			end
-		end
-
-		for _, beam in beams do
-			beam.Enabled = true
-		end
-
-		if bounce and marker then
-			marker.Position = Vector3.new(bounce.X, FloorHeight.Value, bounce.Z)
-			marker.Transparency = 0.45
-		elseif marker then
-			marker.Transparency = 1
-		end
-	end
-
-	Trajectories = vape.Categories.Render:CreateModule({
-		Name = 'Trajectories',
-		Function = function(callback)
-			if callback then
-				accumulator = 0
-				makevisuals()
-
-				connection = runService.Heartbeat:Connect(function(dt)
-					accumulator += dt
-					if accumulator < 1 / UpdateRate.Value then return end
-					accumulator = 0
-					update()
-				end)
-			else
-				if connection then
-					connection:Disconnect()
-					connection = nil
-				end
-				clearvisuals()
-			end
-		end,
-		Tooltip = 'Shows the ball trajectory and first bounce'
-	})
-
-	PredictionTime = Trajectories:CreateSlider({
-		Name = 'Prediction Time',
-		Min = 0.3,
-		Max = 4,
-		Default = 1.2,
-		Decimal = 10,
-		Suffix = 'seconds'
-	})
-
-	PathPoints = Trajectories:CreateSlider({
-		Name = 'Path Points',
-		Min = 10,
-		Max = 120,
-		Default = 30,
-		Decimal = 1,
-		Function = function()
-			if Trajectories.Enabled then
-				clearvisuals()
-				makevisuals()
-			end
-		end
-	})
-
-	UpdateRate = Trajectories:CreateSlider({
-		Name = 'Update Rate',
-		Min = 10,
-		Max = 144,
-		Default = 60,
-		Decimal = 1,
-		Suffix = 'hz'
-	})
-
-	BounceLimit = Trajectories:CreateSlider({
-		Name = 'Bounce Limit',
-		Min = 0,
-		Max = 5,
-		Default = 1,
-		Decimal = 1
-	})
-
-	FloorHeight = Trajectories:CreateSlider({
-		Name = 'Floor Height',
-		Min = -20,
-		Max = 30,
-		Default = 9.6,
-		Decimal = 10
-	})
-
-	BallRadius = Trajectories:CreateSlider({
-		Name = 'Ball Radius',
-		Min = 0.2,
-		Max = 5,
-		Default = 1,
-		Decimal = 10
-	})
-
-	LineWidth = Trajectories:CreateSlider({
-		Name = 'Line Width',
-		Min = 5,
-		Max = 40,
-		Default = 15,
-		Decimal = 1,
-		Function = updatecolors
-	})
-
-	LineColor = Trajectories:CreateColorSlider({
-		Name = 'Line Color',
-		DefaultHue = 0,
-		DefaultSat = 0.8,
-		DefaultValue = 1,
-		Function = updatecolors
-	})
-
-	BounceColor = Trajectories:CreateColorSlider({
-		Name = 'Bounce Color',
-		DefaultHue = 0,
-		DefaultSat = 0.8,
-		DefaultValue = 1,
-		Function = updatecolors
-	})
-
-	Trajectories:Clean(function()
-		if connection then
-			connection:Disconnect()
-			connection = nil
-		end
-		clearvisuals()
-	end)
-end)
-
- run(function()
 	local Offsides
 	local DisplayMode
 	local LineColorSlider
@@ -5045,11 +5802,411 @@ end)
 		Tooltip = "Shows the defender reference line"
 	})
 
+
+
 	Offsides:Clean(function()
 		clearEverything()
 	end)
 end)
- 
+
+run(function()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+
+    local lplr = Players.LocalPlayer
+    local camera = workspace.CurrentCamera
+
+    local Enabled = false
+    local ShowNames = true
+    local ShowDistance = true
+    local ShowLocalPlayer = false
+
+    local MarkerColor = Color3.fromRGB(35, 140, 125)
+    local MarkerTransparency = 0.45
+    local MaxDistance = 1000
+    local Mode = "Box"
+
+    local Folder
+    local Connection
+    local Markers = {}
+
+    local function getTextFromDropdown(selected, fallback)
+        if typeof(selected) == "table" then
+            return selected.Value or selected.Name or selected[1] or fallback
+        end
+
+        return tostring(selected or fallback)
+    end
+
+    local function destroyMarker(player)
+        local marker = Markers[player]
+
+        if marker then
+            if marker.Part then
+                marker.Part:Destroy()
+            end
+
+            Markers[player] = nil
+        end
+    end
+
+    local function createMarker(player)
+        if Markers[player] then
+            return Markers[player]
+        end
+
+        local part = Instance.new("Part")
+        part.Name = player.Name .. "_PositionMarker"
+        part.Anchored = true
+        part.CanCollide = false
+        part.CanTouch = false
+        part.CanQuery = false
+        part.CastShadow = false
+        part.Material = Enum.Material.Neon
+        part.Color = MarkerColor
+        part.Transparency = MarkerTransparency
+        part.Size = Vector3.new(2, 5, 1)
+        part.Parent = Folder
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "PositionLabel"
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 200, 0, 40)
+        billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+        billboard.Parent = part
+
+        local label = Instance.new("TextLabel")
+        label.Name = "Text"
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.fromScale(1, 1)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 13
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextStrokeTransparency = 0.35
+        label.Text = player.Name
+        label.Parent = billboard
+
+        Markers[player] = {
+            Part = part,
+            Billboard = billboard,
+            Label = label
+        }
+
+        return Markers[player]
+    end
+
+    local function updateMarker(player)
+        if player == lplr and not ShowLocalPlayer then
+            destroyMarker(player)
+            return
+        end
+
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+        if not char or not hrp or not hum or hum.Health <= 0 then
+            destroyMarker(player)
+            return
+        end
+
+        local cam = workspace.CurrentCamera
+        if not cam then
+            return
+        end
+
+        local distance = (hrp.Position - cam.CFrame.Position).Magnitude
+
+        if distance > MaxDistance then
+            destroyMarker(player)
+            return
+        end
+
+        local marker = createMarker(player)
+        local part = marker.Part
+
+        local cf
+        local size
+
+        if Mode == "Dot" then
+            cf = CFrame.new(hrp.Position)
+            size = Vector3.new(0.45, 0.45, 0.45)
+
+        elseif Mode == "HumanoidRootPart" then
+            cf = hrp.CFrame
+            size = hrp.Size + Vector3.new(0.12, 0.12, 0.12)
+
+        else
+            local ok, boxCF, boxSize = pcall(function()
+                return char:GetBoundingBox()
+            end)
+
+            if ok and boxCF and boxSize then
+                cf = boxCF
+                size = boxSize + Vector3.new(0.12, 0.12, 0.12)
+            else
+                cf = hrp.CFrame
+                size = Vector3.new(2, 5, 1)
+            end
+        end
+
+        part.CFrame = cf
+        part.Size = size
+        part.Color = MarkerColor
+        part.Transparency = MarkerTransparency
+
+        local text = ""
+
+        if ShowNames then
+            text = player.Name
+        end
+
+        if ShowDistance then
+            if text ~= "" then
+                text = text .. " | "
+            end
+
+            text = text .. tostring(math.floor(distance)) .. " studs"
+        end
+
+        marker.Billboard.Enabled = text ~= ""
+        marker.Label.Text = text
+    end
+
+    local Positions = vape.Categories.Render:CreateModule({
+        Name = "Positions",
+        Tooltip = "Shows players server positions",
+        Function = function(callback)
+            Enabled = callback
+
+            if callback then
+                Folder = Instance.new("Folder")
+                Folder.Name = "PositionsVisualOnly"
+                Folder.Parent = camera or workspace
+
+                Connection = RunService.RenderStepped:Connect(function()
+                    for _, player in ipairs(Players:GetPlayers()) do
+                        updateMarker(player)
+                    end
+                end)
+            else
+                if Connection then
+                    Connection:Disconnect()
+                    Connection = nil
+                end
+
+                for player in pairs(Markers) do
+                    destroyMarker(player)
+                end
+
+                if Folder then
+                    Folder:Destroy()
+                    Folder = nil
+                end
+            end
+        end
+    })
+
+    Positions:CreateToggle({
+        Name = "Show names",
+        Default = true,
+        Function = function(callback)
+            ShowNames = callback
+        end
+    })
+
+    Positions:CreateToggle({
+        Name = "Show distance",
+        Default = true,
+        Function = function(callback)
+            ShowDistance = callback
+        end
+    })
+
+    Positions:CreateToggle({
+        Name = "Show local player",
+        Default = false,
+        Function = function(callback)
+            ShowLocalPlayer = callback
+        end
+    })
+
+    Positions:CreateSlider({
+        Name = "Max distance",
+        Min = 50,
+        Max = 5000,
+        Default = 1000,
+        Function = function(value)
+            MaxDistance = tonumber(value) or 1000
+        end
+    })
+
+    Positions:CreateSlider({
+        Name = "Transparency",
+        Min = 0,
+        Max = 100,
+        Default = 45,
+        Function = function(value)
+            MarkerTransparency = math.clamp((tonumber(value) or 45) / 100, 0, 1)
+        end
+    })
+
+    Positions:CreateColorSlider({
+        Name = "Color",
+        Default = MarkerColor,
+        Function = function(hue, sat, val)
+            if typeof(hue) == "Color3" then
+                MarkerColor = hue
+            else
+                MarkerColor = Color3.fromHSV(hue, sat, val)
+            end
+
+            for _, marker in pairs(Markers) do
+                if marker.Part then
+                    marker.Part.Color = MarkerColor
+                end
+            end
+        end
+    })
+
+    Positions:CreateDropdown({
+        Name = "Mode",
+        List = {
+            "Box",
+            "HumanoidRootPart",
+            "Dot"
+        },
+        Default = "Box",
+        Function = function(selected)
+            Mode = getTextFromDropdown(selected, Mode)
+        end
+    })
+
+    Players.PlayerRemoving:Connect(function(player)
+        destroyMarker(player)
+    end)
+end)
+
+if vape and vape.CreateNotification then
+    vape:CreateNotification(
+        "Welcome",
+        "Have fun!",
+        9,
+        "warning"
+    )
+end
+
+run(function()
+	local HitboxExtender
+	local SizeSlider
+	local multiplier = 1.35
+
+	HitboxExtender = vape.Categories.Blatant:CreateModule({
+		Name = 'HitboxExtender',
+		Function = function(callback)
+			hitboxExpansion.State.Ball = callback
+			hitboxExpansion.State.BallMultiplier = multiplier
+			if callback then
+				hitboxExpansion:Refresh()
+			end
+		end,
+		Tooltip = 'Expands ball hitbox'
+	})
+
+	SizeSlider = HitboxExtender:CreateSlider({
+		Name = 'Multiplier',
+		Min = 1,
+		Max = 35,
+		Default = 13.5,
+		Decimal = 10,
+		Function = function(val)
+			multiplier = val / 10
+			hitboxExpansion.State.BallMultiplier = multiplier
+		end,
+		Suffix = function(val)
+			return string.format('%.2fx', val / 10)
+		end
+	})
+
+	HitboxExtender:Clean(function()
+		hitboxExpansion.State.Ball = false
+	end)
+end)
+
+run(function()
+	local PhysicalReach
+	local SizeSlider
+	local multiplier = 1.35
+
+	PhysicalReach = vape.Categories.Blatant:CreateModule({
+		Name = 'PhysicalReach',
+		Function = function(callback)
+			hitboxExpansion.State.Player = callback
+			hitboxExpansion.State.PlayerMultiplier = multiplier
+			if callback then
+				hitboxExpansion:Refresh()
+			end
+		end,
+		Tooltip = 'Expands player hitboxes'
+	})
+
+	SizeSlider = PhysicalReach:CreateSlider({
+		Name = 'Multiplier',
+		Min = 1,
+		Max = 35,
+		Default = 13.5,
+		Decimal = 10,
+		Function = function(val)
+			multiplier = val / 10
+			hitboxExpansion.State.PlayerMultiplier = multiplier
+		end,
+		Suffix = function(val)
+			return string.format('%.2fx', val / 10)
+		end
+	})
+
+	PhysicalReach:Clean(function()
+		hitboxExpansion.State.Player = false
+	end)
+end)
+
+run(function()
+	local ALLHBE
+	local SizeSlider
+	local multiplier = 1.35
+
+	ALLHBE = vape.Categories.Blatant:CreateModule({
+		Name = 'ALLHBE',
+		Function = function(callback)
+			hitboxExpansion.State.All = callback
+			hitboxExpansion.State.AllMultiplier = multiplier
+			if callback then
+				hitboxExpansion:Refresh()
+			end
+		end,
+		Tooltip = 'Expands hitbox size for easier hits'
+	})
+
+	SizeSlider = ALLHBE:CreateSlider({
+		Name = 'Multiplier',
+		Min = 1,
+		Max = 35,
+		Default = 13.5,
+		Decimal = 10,
+		Function = function(val)
+			multiplier = val / 10
+			hitboxExpansion.State.AllMultiplier = multiplier
+		end,
+		Suffix = function(val)
+			return string.format('%.2fx', val / 10)
+		end
+	})
+
+	ALLHBE:Clean(function()
+		hitboxExpansion.State.All = false
+	end)
+end)
+
 run(function()
 	local NoDelay
 	local Method
@@ -5235,7 +6392,7 @@ run(function()
 				end
 			end
 		end,
-		Tooltip = 'choose the method u want in the dropdown pls'
+		Tooltip = 'Interpolation = old visual delay flags\nReplication = less server/client position delay, explained by ATP'
 	})
 
 	Method = NoDelay:CreateDropdown({
@@ -5245,7 +6402,7 @@ run(function()
 		Function = function()
 			refresh()
 		end,
-		Tooltip = 'Interpolation - old method for less visual delay\nReplication - less replication delay, closer server/client position so sheilding should be better and less reach opponents'
+		Tooltip = 'ATP: Replication keeps server position closer to client position'
 	})
 
 	NoDelay:Clean(function()
@@ -5496,11 +6653,8 @@ run(function()
             end
         end
     })
-end)
+end)																																																																													
 
-
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------sorry, this will make it easier for me to find the cut between modules ands legit mods
-			
 run(function()
 	local Atmosphere
 	local Toggles = {}
@@ -6457,13 +7611,68 @@ run(function()
 	})
 	
 end)
-	
+																																																																																																																			
 
-if vape and vape.CreateNotification then
-    vape:CreateNotification(
-        "Welcome",
-        "Have fun!",
-        9,
-        "warning"
-    )
+function universal:CreateModule(categoryName, config)
+	return modulelib.Create(categoryName, config)
 end
+
+function universal:RegisterObject(name, object)
+	self.Objects[name] = object
+	return object
+end
+
+function universal:GetDiagnostics()
+	return deepcopy(self.Diagnostics)
+end
+
+function universal:Destroy()
+	for _, sig in pairs(self.Signals) do
+		if type(sig) == 'table' and type(sig.Destroy) == 'function' then
+			sig:Destroy()
+		end
+	end
+
+	for _, st in pairs(self.Stores) do
+		if type(st) == 'table' and type(st.Destroy) == 'function' then
+			st:Destroy()
+		end
+	end
+
+	for _, obj in pairs(self.Objects) do
+		pcall(function()
+			if typeof(obj) == 'Instance' then
+				obj:Destroy()
+			elseif type(obj) == 'table' and type(obj.Destroy) == 'function' then
+				obj:Destroy()
+			elseif type(obj) == 'table' and type(obj.Clean) == 'function' then
+				obj:Clean()
+			end
+		end)
+	end
+
+	table.clear(self.Objects)
+	table.clear(self.Modules)
+end
+
+if vape.Clean then
+	vape:Clean(function()
+		universal:Destroy()
+	end)
+end
+
+universal.Ready = true
+universal:Emit('ready', universal)
+
+local universalmodules = {}
+
+function universalmodules.Wrap(categoryName, config)
+	return universal:CreateModule(categoryName, config)
+end
+
+function universalmodules.Get()
+	return universal
+end
+
+shared.vapeuniversal = universal
+vape.Libraries.universalmodules = universalmodules
