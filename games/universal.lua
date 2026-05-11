@@ -6525,6 +6525,30 @@ local function playtrack(name, priority, fade, weight, speed)
 	return track
 end
 
+local function playassetanimation(id, priority, fade, weight, speed)
+	local animator = getanimator()
+	if not animator then return end
+
+	local animation = Instance.new('Animation')
+	animation.AnimationId = id
+
+	local track = animator:LoadAnimation(animation)
+	if priority then
+		track.Priority = priority
+	end
+
+	track:Play(fade or 0, weight or 1, speed or 1)
+
+	task.delay(5, function()
+		pcall(function()
+			track:Destroy()
+			animation:Destroy()
+		end)
+	end)
+
+	return track
+end
+
 local function getball()
 	local temp = workspaceService:FindFirstChild('Temp')
 	return temp and temp:FindFirstChild('Ball')
@@ -6583,6 +6607,18 @@ local function getshotdirection(magnitude, elevation)
 	end
 
 	return look.Unit * magnitude + Vector3.new(0, elevation or 0, 0)
+end
+
+local function getmousedirection()
+	local camera = workspaceService.CurrentCamera
+	local location = inputService:GetMouseLocation()
+
+	if camera then
+		return camera:ViewportPointToRay(location.X, location.Y).Direction
+	end
+
+	local root = getroot()
+	return root and root.CFrame.LookVector or Vector3.zero
 end
 
 local function disablesoon(module)
@@ -6657,30 +6693,27 @@ local function createinstant(name, tooltip, func)
 		})
 
 		distance = module:CreateSlider({
-			Name = 'Legit Distance',
+			Name = 'Distance',
 			Min = 1,
 			Max = 15,
-			Default = 3,
+			Default = 6.1,
 			Decimal = 10,
 			Suffix = 'studs'
 		})
 	end)
 end
 
-createinstant('InstaPowerShot', 'Instant 100% charge power shot', function(module, ball, root, side)
-	playpowershot(side)
+createinstant('InstaPowerShot', 'Instant 100% charge power shot', function(module, ball, root)
+	playassetanimation('rbxassetid://15434792076', Enum.AnimationPriority.Action2, 0, 1, 1)
 
 	getkey('Kick'):FireServer(
-		getshotdirection(150, 0),
+		getmousedirection(),
 		ball,
 		false,
 		true,
 		100,
-		side,
-		root.CFrame,
-		{},
-		false,
-		false
+		'Left',
+		root.CFrame
 	)
 end)
 
@@ -6693,14 +6726,17 @@ createinstant('Chip', 'Instant chip/lob shot', function(module, ball, root, side
 	playchip(side)
 
 	getkey('Kick'):FireServer(
-		getshotdirection(45, 55),
+		getshotdirection(40.58, 22.85638999938965),
 		ball,
 		false,
 		false,
-		35,
+		32.77347094472498,
 		side,
 		root.CFrame,
-		{},
+		{
+			Enum.KeyCode.W,
+			Enum.KeyCode.LeftShift
+		},
 		false,
 		false
 	)
@@ -6712,6 +6748,10 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 	pcall(function()
 		getkey('PowerShot'):FireServer()
 	end)
+
+	task.wait(0.6)
+
+	if not ball:IsDescendantOf(workspaceService) then return end
 
 	getkey('Kick'):FireServer(
 		getshotdirection(200, 0),
@@ -6725,7 +6765,7 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 		false,
 		false
 	)
-end)
+end)																														
 																														
 run(function()
 	local Atmosphere
