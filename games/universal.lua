@@ -6766,7 +6766,384 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 		false
 	)
 end)																														
-																														
+
+run(function()
+	local runService = game:GetService('RunService')
+	local workspaceService = game:GetService('Workspace')
+
+	local Trajectories
+	local PredictionTime
+	local PathPoints
+	local UpdateRate
+	local BounceLimit
+	local FloorHeight
+	local BallRadius
+	local LineWidth
+	local LineColor
+	local BounceColor
+	local connection
+	local marker
+	local lastpoints = 0
+	local accumulator = 0
+	local parts = {}
+	local attachments = {}
+	local beams = {}
+
+	local function getcolor(option, fallback)
+		return option and Color3.fromHSV(option.Hue, option.Sat, option.Value) or fallback
+	end
+
+	local function clearvisuals()
+		for _, beam in beams do
+			beam:Destroy()
+		end
+		for _, part in parts do
+			part:Destroy()
+		end
+		if marker then
+			marker:Destroy()
+			marker = nil
+		end
+		table.clear(parts)
+		table.clear(attachments)
+		table.clear(beams)
+		lastpoints = 0
+	end
+
+	local function hidevisuals()
+		for _, beam in beams do
+			beam.Enabled = false
+		end
+		if marker then
+			marker.Transparency = 1
+		end
+	end
+
+	local function createpart(index)
+		local part = Instance.new('Part')
+		part.Name = 'TrajectoryPoint_'..index
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.CastShadow = false
+		part.Transparency = 1
+		part.Size = Vector3.new(0.1, 0.1, 0.1)
+		part.Parent = workspaceService
+
+		local attachment = Instance.new('Attachment')
+		attachment.Parent = part
+
+		parts[index] = part
+		attachments[index] = attachment
+	end
+
+	local function createbeam(index)
+		local beam = Instance.new('Beam')
+		beam.Name = 'TrajectoryBeam_'..index
+		beam.Attachment0 = attachments[index]
+		beam.Attachment1 = attachments[index + 1]
+		beam.FaceCamera = true
+		beam.LightEmission = 1
+		beam.LightInfluence = 0
+		beam.Segments = 2
+		beam.Width0 = LineWidth.Value / 100
+		beam.Width1 = LineWidth.Value / 100
+		beam.Color = ColorSequence.new(getcolor(LineColor, Color3.fromRGB(255, 50, 50)))
+		beam.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(1, 0.45)
+		})
+		beam.Enabled = false
+		beam.Parent = parts[index]
+		beams[index] = beam
+	end
+
+	local function makevisuals()
+		local amount = PathPoints.Value
+		if lastpoints == amount then return end
+
+		clearvisuals()
+
+		for i = 1, amount do
+			createpart(i)
+		end
+
+		for i = 1, amount - 1 do
+			createbeam(i)
+		end
+
+		marker = Instance.new('Part')
+		marker.Name = 'TrajectoryLanding'
+		marker.Anchored = true
+		marker.CanCollide = false
+		marker.CanTouch = false
+		marker.CanQuery = false
+		marker.CastShadow = false
+		marker.Shape = Enum.PartType.Cylinder
+		marker.Material = Enum.Material.Neon
+		marker.Size = Vector3.new(0.08, 3, 3)
+		marker.CFrame = CFrame.new(0, -10000, 0) * CFrame.Angles(0, 0, math.rad(90))
+		marker.Transparency = 1
+		marker.Color = getcolor(BounceColor, Color3.fromRGB(255, 50, 50))
+		marker.Parent = workspaceService
+
+		lastpoints = amount
+	end
+
+	local function updatecolors()
+		local linecolor = getcolor(LineColor, Color3.fromRGB(255, 50, 50))
+		local bouncecolor = getcolor(BounceColor, Color3.fromRGB(255, 50, 50))
+		local width = LineWidth.Value / 100
+
+		for _, beam in beams do
+			beam.Color = ColorSequence.new(linecolor)
+			beam.Width0 = width
+			beam.Width1 = width
+		end
+
+		if marker then
+			marker.Color = bouncecolor
+		end
+	end
+
+	local function findball()
+		local temp = workspaceService:FindFirstChild('Temp')
+		local ball = temp and temp:FindFirstChild('Ball') or workspaceService:FindFirstChild('Ball')
+
+		if ball and ball:IsA('BasePart') then
+			return ball
+		end
+
+		if ball and ball:IsA('Model') then
+			return ball.PrimaryPart or ball:FindFirstChildWhichIsA('BasePart', true)
+		end
+	end
+
+	local function getforceacceleration(ball)
+		local mass = math.max(ball.AssemblyMass, 0.001)
+		local acceleration = Vector3.zero
+
+		for _, obj in ball:GetDescendants() do
+			if obj:IsA('VectorForce') and obj.Enabled then
+				local force = obj.Force
+
+				if obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment0 and obj.Attachment0 then
+					force = obj.Attachment0.WorldCFrame:VectorToWorldSpace(force)
+				elseif obj.RelativeTo == Enum.ActuatorRelativeTo.Attachment1 and obj.Attachment1 then
+					force = obj.Attachment1.WorldCFrame:VectorToWorldSpace(force)
+				end
+
+				acceleration += force / mass
+			end
+		end
+
+		return acceleration
+	end
+
+	local function simulate(ball)
+		local amount = PathPoints.Value
+		local steptime = math.clamp(PredictionTime.Value / math.max(amount, 1), 0.005, 0.08)
+		local floorheight = FloorHeight.Value
+		local radius = BallRadius.Value
+		local bounces = 0
+		local firstbounce
+		local points = {}
+		local position = ball.Position
+		local velocity = ball.AssemblyLinearVelocity
+		local gravity = Vector3.new(0, -workspaceService.Gravity, 0)
+		local acceleration = gravity + getforceacceleration(ball)
+
+		for i = 1, amount do
+			local oldposition = position
+			local oldvelocity = velocity
+
+			velocity += acceleration * steptime
+			position += velocity * steptime
+
+			if position.Y - radius <= floorheight then
+				local rayalpha = 0
+				local bottomold = oldposition.Y - radius
+				local bottomnew = position.Y - radius
+				local delta = bottomold - bottomnew
+
+				if math.abs(delta) > 0.0001 then
+					rayalpha = math.clamp((bottomold - floorheight) / delta, 0, 1)
+				end
+
+				local impact = oldposition:Lerp(position, rayalpha)
+				impact = Vector3.new(impact.X, floorheight + radius, impact.Z)
+				firstbounce = firstbounce or impact
+
+				if bounces < BounceLimit.Value then
+					bounces += 1
+					position = impact
+					velocity = Vector3.new(oldvelocity.X, -velocity.Y * 0.7, oldvelocity.Z)
+				else
+					position = impact
+					velocity = Vector3.new(velocity.X, 0, velocity.Z)
+				end
+			end
+
+			points[i] = position
+		end
+
+		return points, firstbounce
+	end
+
+	local function update()
+		makevisuals()
+		updatecolors()
+
+		local ball = findball()
+		if not ball then
+			hidevisuals()
+			return
+		end
+
+		local radius = BallRadius.Value
+		local floorheight = FloorHeight.Value
+
+		if ball.Position.Y - radius <= floorheight + 1 then
+			hidevisuals()
+			return
+		end
+
+		local points, bounce = simulate(ball)
+
+		for i = 1, lastpoints do
+			local point = points[i]
+			if point and parts[i] then
+				parts[i].Position = point
+			end
+		end
+
+		for _, beam in beams do
+			beam.Enabled = true
+		end
+
+		if bounce and marker then
+			marker.CFrame = CFrame.new(bounce.X, FloorHeight.Value + 0.03, bounce.Z) * CFrame.Angles(0, 0, math.rad(90))
+			marker.Transparency = 0.35
+		elseif marker then
+			marker.Transparency = 1
+		end
+	end
+
+	Trajectories = vape.Categories.Render:CreateModule({
+		Name = 'Trajectories',
+		Function = function(callback)
+			if callback then
+				accumulator = 0
+				makevisuals()
+
+				connection = runService.Heartbeat:Connect(function(dt)
+					accumulator += dt
+					if accumulator < 1 / UpdateRate.Value then return end
+					accumulator = 0
+					update()
+				end)
+			else
+				if connection then
+					connection:Disconnect()
+					connection = nil
+				end
+				clearvisuals()
+			end
+		end,
+		Tooltip = 'Shows the ball trajectory and first bounce'
+	})
+
+	PredictionTime = Trajectories:CreateSlider({
+		Name = 'Prediction Time',
+		Min = 0.3,
+		Max = 4,
+		Default = 2,
+		Decimal = 10,
+		Suffix = 'seconds'
+	})
+
+	PathPoints = Trajectories:CreateSlider({
+		Name = 'Path Points',
+		Min = 10,
+		Max = 120,
+		Default = 30,
+		Decimal = 1,
+		Function = function()
+			if Trajectories.Enabled then
+				clearvisuals()
+				makevisuals()
+			end
+		end
+	})
+
+	UpdateRate = Trajectories:CreateSlider({
+		Name = 'Update Rate',
+		Min = 10,
+		Max = 144,
+		Default = 60,
+		Decimal = 1,
+		Suffix = 'hz'
+	})
+
+	BounceLimit = Trajectories:CreateSlider({
+		Name = 'Bounce Limit',
+		Min = 0,
+		Max = 5,
+		Default = 0,
+		Decimal = 1
+	})
+
+	FloorHeight = Trajectories:CreateSlider({
+		Name = 'Floor Height',
+		Min = -20,
+		Max = 30,
+		Default = 9.6,
+		Decimal = 10
+	})
+
+	BallRadius = Trajectories:CreateSlider({
+		Name = 'Ball Radius',
+		Min = 0.2,
+		Max = 5,
+		Default = 1,
+		Decimal = 10
+	})
+
+	LineWidth = Trajectories:CreateSlider({
+		Name = 'Line Width',
+		Min = 5,
+		Max = 40,
+		Default = 15,
+		Decimal = 1,
+		Function = updatecolors
+	})
+
+	LineColor = Trajectories:CreateColorSlider({
+		Name = 'Line Color',
+		DefaultHue = 0,
+		DefaultSat = 0.8,
+		DefaultValue = 1,
+		Function = updatecolors
+	})
+
+	BounceColor = Trajectories:CreateColorSlider({
+		Name = 'Landing Color',
+		DefaultHue = 0,
+		DefaultSat = 0.8,
+		DefaultValue = 1,
+		Function = updatecolors
+	})
+
+	Trajectories:Clean(function()
+		if connection then
+			connection:Disconnect()
+			connection = nil
+		end
+		clearvisuals()
+	end)
+end)
+																			
 run(function()
 	local Atmosphere
 	local Toggles = {}
