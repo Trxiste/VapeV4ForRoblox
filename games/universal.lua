@@ -6509,151 +6509,234 @@ run(function()
     })
 end)
 
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local KnitServices = {
+	knit = nil,
+	keyHandler = nil,
+	keys = {}
+}
+
+local function getCategory()
+	return vape.Categories.InstantActions or vape.Categories["Instant actions"]
+end
+
+local function getKey(keyName)
+	if not KnitServices.knit then
+		local knit = require(ReplicatedStorage.Packages.Knit)
+		knit.OnStart():await()
+		KnitServices.knit = knit
+		KnitServices.keyHandler = knit.GetService("KeyHandlerService")
+	end
+
+	if not KnitServices.keys[keyName] then
+		KnitServices.keys[keyName] = KnitServices.keyHandler:GetKey(keyName)
+	end
+
+	return KnitServices.keys[keyName]
+end
+
+local function getBall()
+	local temp = Workspace:FindFirstChild("Temp")
+	return temp and temp:FindFirstChild("Ball")
+end
+
+local function getRoot()
+	local character = LocalPlayer.Character
+	return character and character:FindFirstChild("HumanoidRootPart")
+end
+
+local function getShotDirection(magnitude, elevation)
+	local root = getRoot()
+	if not root then
+		return Vector3.new(0, elevation or 0, -magnitude)
+	end
+
+	local look = root.CFrame.LookVector
+	if look.Magnitude <= 0 then
+		return Vector3.new(0, elevation or 0, -magnitude)
+	end
+
+	return (look.Unit * magnitude) + Vector3.new(0, elevation or 0, 0)
+end
+
+local function disableSoon(module)
+	task.delay(0.2, function()
+		if module and module.Enabled then
+			module:Toggle()
+		end
+	end)
+end
 
 run(function()
-    local InstaBicycle
-    InstaBicycle = vape.Categories.Blatant:CreateModule({
-        Name = "InstaBicycle",
-        Tooltip = "Instant bicycle kick",
-        Function = function(callback)
-            if callback then
-                task.spawn(function()
-                    local ball = getBall()
-                    if not ball then
-                        vape:CreateNotification("InstaBicycle", "Ball not found!", 3, "alert")
-                        disableSoon(InstaBicycle)
-                        return
-                    end
+	local category = getCategory()
+	if not category then return end
 
-                    local Bicycle = getKey("Bicycle")
-                    local BicycleHit = getKey("BicycleHit")
+	local InstaPowerShot
 
-                    Bicycle:FireServer()
+	InstaPowerShot = category:CreateModule({
+		Name = "PowerShot",
+		Tooltip = "Instant powershot",
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					local ball = getBall()
+					if not ball then
+						vape:CreateNotification("InstaPowerShot", "Ball not found!", 3, "alert")
+						disableSoon(InstaPowerShot)
+						return
+					end
 
-                    local velocity = getShotDirection(120, -20)
-                    BicycleHit:FireServer(velocity, ball)
+					local Kick = getKey("Kick")
+					local root = getRoot()
+					local rootCFrame = root and root.CFrame or CFrame.new()
 
-                    vape:CreateNotification("InstaBicycle", "Fired!", 2)
-                    disableSoon(InstaBicycle)
-                end)
-            end
-        end
-    })
+					Kick:FireServer(
+						getShotDirection(150, 0),
+						ball,
+						false,
+						true,
+						100,
+						"Right",
+						rootCFrame,
+						{},
+						false,
+						false
+					)
+
+					vape:CreateNotification("InstaPowerShot", "Fired!", 2)
+					disableSoon(InstaPowerShot)
+				end)
+			end
+		end
+	})
 end)
 
 run(function()
-    local InstaHeader
-    InstaHeader = vape.Categories.Blatant:CreateModule({
-        Name = "InstaHeader",
-        Tooltip = "Instant header",
-        Function = function(callback)
-            if callback then
-                task.spawn(function()
-                    local ball = getBall()
-                    if not ball then
-                        vape:CreateNotification("InstaHeader", "Ball not found!", 3, "alert")
-                        disableSoon(InstaHeader)
-                        return
-                    end
+	local category = getCategory()
+	if not category then return end
 
-                    local Header = getKey("Header")
-                    local velocity = getShotDirection(90, 10)   
-                    Header:FireServer(velocity, ball)
+	local Header
 
-                    vape:CreateNotification("InstaHeader", "Fired!", 2)
-                    disableSoon(InstaHeader)
-                end)
-            end
-        end
-    })
+	Header = category:CreateModule({
+		Name = "Header",
+		Tooltip = "Instant header",
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					local ball = getBall()
+					if not ball then
+						vape:CreateNotification("Header", "Ball not found!", 3, "alert")
+						disableSoon(Header)
+						return
+					end
+
+					local HeaderRemote = getKey("Header")
+					HeaderRemote:FireServer(getShotDirection(90, 10), ball)
+
+					vape:CreateNotification("Header", "Fired!", 2)
+					disableSoon(Header)
+				end)
+			end
+		end
+	})
 end)
 
 run(function()
-    local InstaChipShot
-    InstaChipShot = vape.Categories.Blatant:CreateModule({
-        Name = "InstaChipShot",
-        Tooltip = "Instant chip/lob shot",
-        Function = function(callback)
-            if callback then
-                task.spawn(function()
-                    local ball = getBall()
-                    if not ball then
-                        vape:CreateNotification("InstaChipShot", "Ball not found!", 3, "alert")
-                        disableSoon(InstaChipShot)
-                        return
-                    end
+	local category = getCategory()
+	if not category then return end
 
-                    local Kick = getKey("Kick")
-                    local velocity = getShotDirection(45, 55)   
-                    local charge = 35
-                    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    local rootCFrame = root and root.CFrame or CFrame.new()
+	local Chip
 
-                    Kick:FireServer(
-                        velocity,
-                        ball,
-                        false,      
-                        false,      
-                        charge,
-                        "Right",   
-                        rootCFrame,
-                        {},
-                        false,
-                        false
-                    )
+	Chip = category:CreateModule({
+		Name = "Chip",
+		Tooltip = "Instant chip",
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					local ball = getBall()
+					if not ball then
+						vape:CreateNotification("Chip", "Ball not found!", 3, "alert")
+						disableSoon(Chip)
+						return
+					end
 
-                    vape:CreateNotification("InstaChipShot", "Fired!", 2)
-                    disableSoon(InstaChipShot)
-                end)
-            end
-        end
-    })
+					local Kick = getKey("Kick")
+					local root = getRoot()
+					local rootCFrame = root and root.CFrame or CFrame.new()
+
+					Kick:FireServer(
+						getShotDirection(45, 55),
+						ball,
+						false,
+						false,
+						35,
+						"Right",
+						rootCFrame,
+						{},
+						false,
+						false
+					)
+
+					vape:CreateNotification("Chip", "Fired!", 2)
+					disableSoon(Chip)
+				end)
+			end
+		end
+	})
 end)
 
 run(function()
-    local InstaOvercharge
-    InstaOvercharge = vape.Categories.Blatant:CreateModule({
-        Name = "InstaOvercharge",
-        Tooltip = "Instant overcharge kick (150+ charge)",
-        Function = function(callback)
-            if callback then
-                task.spawn(function()
-                    local ball = getBall()
-                    if not ball then
-                        vape:CreateNotification("InstaOvercharge", "Ball not found!", 3, "alert")
-                        disableSoon(InstaOvercharge)
-                        return
-                    end
+	local category = getCategory()
+	if not category then return end
 
-                    local PowerShot = getKey("PowerShot")
-                    pcall(function() PowerShot:FireServer() end)
+	local OverCharge
 
-                    local Kick = getKey("Kick")
-                    local velocity = getShotDirection(200, 0)   
-                    local charge = 150                          
-                    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    local rootCFrame = root and root.CFrame or CFrame.new()
+	OverCharge = category:CreateModule({
+		Name = "OverCharge",
+		Tooltip = "Instant overcharge",
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					local ball = getBall()
+					if not ball then
+						vape:CreateNotification("OverCharge", "Ball not found!", 3, "alert")
+						disableSoon(OverCharge)
+						return
+					end
 
-                    Kick:FireServer(
-                        velocity,
-                        ball,
-                        false,
-                        true,       
-                        charge,
-                        "Right",
-                        rootCFrame,
-                        {},
-                        false,
-                        false
-                    )
+					local PowerShot = getKey("PowerShot")
+					pcall(function()
+						PowerShot:FireServer()
+					end)
 
-                    vape:CreateNotification("InstaOvercharge", "Fired!", 2)
-                    disableSoon(InstaOvercharge)
-                end)
-            end
-        end
-    })
-end)																																																																													
+					local Kick = getKey("Kick")
+					local root = getRoot()
+					local rootCFrame = root and root.CFrame or CFrame.new()
+
+					Kick:FireServer(
+						getShotDirection(200, 0),
+						ball,
+						false,
+						true,
+						150,
+						"Right",
+						rootCFrame,
+						{},
+						false,
+						false
+					)
+
+					vape:CreateNotification("OverCharge", "Fired!", 2)
+					disableSoon(OverCharge)
+				end)
+			end
+		end
+	})
+end)																																																																												
 
 run(function()
 	local Atmosphere
