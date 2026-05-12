@@ -6439,360 +6439,6 @@ run(function()
 			applied = false
 		end
 	end)
-end)
-
-local playersService = game:GetService('Players')
-local replicatedStorage = game:GetService('ReplicatedStorage')
-local workspaceService = game:GetService('Workspace')
-local inputService = game:GetService('UserInputService')
-
-local lplr = playersService.LocalPlayer
-local knitservices = {
-	knit = nil,
-	keyhandler = nil,
-	keys = {}
-}
-
-local animcache = {
-	animator = nil,
-	animtype = nil,
-	tracks = {}
-}
-
-local function getcategory()
-	return vape.Categories.InstantActions or vape.Categories['Instant actions']
-end
-
-local function getkey(keyname)
-	if not knitservices.knit then
-		local knit = require(replicatedStorage.Packages.Knit)
-		knit.OnStart():await()
-		knitservices.knit = knit
-		knitservices.keyhandler = knit.GetService('KeyHandlerService')
-	end
-
-	if not knitservices.keys[keyname] then
-		knitservices.keys[keyname] = knitservices.keyhandler:GetKey(keyname)
-	end
-
-	return knitservices.keys[keyname]
-end
-
-local function getcharacter()
-	return lplr.Character
-end
-
-local function getroot()
-	local character = getcharacter()
-	return character and character:FindFirstChild('HumanoidRootPart')
-end
-
-local function gethumanoid()
-	local character = getcharacter()
-	return character and character:FindFirstChildOfClass('Humanoid')
-end
-
-local function getanimator()
-	local humanoid = gethumanoid()
-	if not humanoid then return end
-	return humanoid:FindFirstChildOfClass('Animator') or humanoid:FindFirstChild('Animator')
-end
-
-local function getanimset()
-	local data = lplr:FindFirstChild('Data')
-	local animationtype = data and data:FindFirstChild('animationType')
-	local animfolder = replicatedStorage:FindFirstChild('AnimFolder')
-	local animtype = animationtype and animationtype.Value
-
-	if not animfolder or not animtype then return end
-	return animfolder:FindFirstChild(animtype), animtype
-end
-
-local function resetanimcache(animator, animtype)
-	if animcache.animator == animator and animcache.animtype == animtype then return end
-
-	for _, track in animcache.tracks do
-		pcall(function()
-			track:Stop()
-			track:Destroy()
-		end)
-	end
-
-	table.clear(animcache.tracks)
-	animcache.animator = animator
-	animcache.animtype = animtype
-end
-
-local function gettrack(name, priority)
-	local animator = getanimator()
-	local animset, animtype = getanimset()
-	if not animator or not animset then return end
-
-	resetanimcache(animator, animtype)
-
-	if not animcache.tracks[name] then
-		local object = animset:FindFirstChild(name)
-		if not object then return end
-
-		local track = animator:LoadAnimation(object)
-		if priority then
-			track.Priority = priority
-		end
-
-		animcache.tracks[name] = track
-	end
-
-	return animcache.tracks[name]
-end
-
-local function playtrack(name, priority, fade, weight, speed)
-	local track = gettrack(name, priority)
-	if track then
-		track:Play(fade or 0, weight or 1, speed or 1)
-	end
-	return track
-end
-
-local function playassetanimation(id, priority, fade, weight, speed)
-	local animator = getanimator()
-	if not animator then return end
-
-	local animation = Instance.new('Animation')
-	animation.AnimationId = id
-
-	local track = animator:LoadAnimation(animation)
-	if priority then
-		track.Priority = priority
-	end
-
-	track:Play(fade or 0, weight or 1, speed or 1)
-
-	task.delay(5, function()
-		pcall(function()
-			track:Destroy()
-			animation:Destroy()
-		end)
-	end)
-
-	return track
-end
-
-local function getball()
-	local temp = workspaceService:FindFirstChild('Temp')
-	return temp and temp:FindFirstChild('Ball')
-end
-
-local function getfeetposition()
-	local character = getcharacter()
-	local root = getroot()
-	if not character or not root then return end
-
-	local left = character:FindFirstChild('LeftFoot') or character:FindFirstChild('Left Leg')
-	local right = character:FindFirstChild('RightFoot') or character:FindFirstChild('Right Leg')
-
-	if left and right then
-		return (left.Position + right.Position) / 2
-	end
-
-	if left then
-		return left.Position
-	end
-
-	if right then
-		return right.Position
-	end
-
-	return root.Position - Vector3.new(0, 3, 0)
-end
-
-local function getside(ball, root)
-	local direction = root.Position * Vector3.new(1, 0, 1) - ball.Position * Vector3.new(1, 0, 1)
-	if direction.Magnitude <= 0 then
-		return 'Right'
-	end
-	return root.CFrame.RightVector:Dot(direction.Unit) > 0 and 'Left' or 'Right'
-end
-
-local function canfire(mode, distance)
-	if mode.Value == 'Blatant' then return true end
-
-	local ball = getball()
-	local feet = getfeetposition()
-	if not ball or not feet then return false end
-
-	return (ball.Position - feet).Magnitude <= distance.Value
-end
-
-local function getshotdirection(magnitude, elevation)
-	local root = getroot()
-	if not root then
-		return Vector3.new(0, elevation or 0, -magnitude)
-	end
-
-	local look = root.CFrame.LookVector
-	if look.Magnitude <= 0 then
-		return Vector3.new(0, elevation or 0, -magnitude)
-	end
-
-	return look.Unit * magnitude + Vector3.new(0, elevation or 0, 0)
-end
-
-local function getmousedirection()
-	local camera = workspaceService.CurrentCamera
-	local location = inputService:GetMouseLocation()
-
-	if camera then
-		return camera:ViewportPointToRay(location.X, location.Y).Direction
-	end
-
-	local root = getroot()
-	return root and root.CFrame.LookVector or Vector3.zero
-end
-
-local function disablesoon(module)
-	task.delay(0.2, function()
-		if module and module.Enabled then
-			module:Toggle()
-		end
-	end)
-end
-
-local function playpowershot(side)
-	local left = inputService:IsKeyDown(Enum.KeyCode.A)
-	local right = inputService:IsKeyDown(Enum.KeyCode.D)
-	local name = side == 'Left' and 'PowerShotExtraL' or 'PowerShotExtraR'
-
-	if left then
-		name = 'PowerShotExtraLL'
-	elseif right then
-		name = 'PowerShotExtraRR'
-	end
-
-	playtrack(name, Enum.AnimationPriority.Action2, 0, 1, 1)
-end
-
-local function playchip(side)
-	playtrack(side == 'Left' and 'TapIn_ChipLeft' or 'TapIn_ChipRight', Enum.AnimationPriority.Action, 0, 1, 1)
-end
-
-local function playheader()
-	playtrack('Header', Enum.AnimationPriority.Action2, 0, 1, 1)
-end
-
-local function createinstant(name, tooltip, func)
-	run(function()
-		local category = getcategory()
-		if not category then return end
-
-		local module
-		local mode
-		local distance
-
-		module = category:CreateModule({
-			Name = name,
-			Tooltip = tooltip,
-			Function = function(callback)
-				if callback then
-					task.spawn(function()
-						if not canfire(mode, distance) then
-							disablesoon(module)
-							return
-						end
-
-						local ball = getball()
-						local root = getroot()
-
-						if not ball or not root then
-							disablesoon(module)
-							return
-						end
-
-						func(module, ball, root, getside(ball, root))
-						disablesoon(module)
-					end)
-				end
-			end
-		})
-
-		mode = module:CreateDropdown({
-			Name = 'Mode',
-			List = {'Legit', 'Blatant'},
-			Default = 'Legit'
-		})
-
-		distance = module:CreateSlider({
-			Name = 'Distance',
-			Min = 1,
-			Max = 15,
-			Default = 6.1,
-			Decimal = 10,
-			Suffix = 'studs'
-		})
-	end)
-end
-
-createinstant('InstaPowerShot', 'Instant 100% charge power shot', function(module, ball, root)
-	playassetanimation('rbxassetid://15434792076', Enum.AnimationPriority.Action2, 0, 1, 1)
-
-	getkey('Kick'):FireServer(
-		getmousedirection(),
-		ball,
-		false,
-		true,
-		100,
-		'Left',
-		root.CFrame
-	)
-end)
-
-createinstant('Header', 'Instant header', function(module, ball, root)
-	playheader()
-	getkey('Header'):FireServer(getshotdirection(90, 7.5), ball)
-end)
-
-createinstant('Chip', 'Instant chip/lob shot', function(module, ball, root, side)
-	playchip(side)
-
-	getkey('Kick'):FireServer(
-		getshotdirection(40.58, 22.85638999938965),
-		ball,
-		false,
-		false,
-		32.77347094472498,
-		side,
-		root.CFrame,
-		{
-			Enum.KeyCode.W,
-			Enum.KeyCode.LeftShift
-		},
-		false,
-		false
-	)
-end)
-
-createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, root, side)
-	playpowershot(side)
-
-	pcall(function()
-		getkey('PowerShot'):FireServer()
-	end)
-
-	task.wait(0.45)
-
-	if not ball:IsDescendantOf(workspaceService) then return end
-
-	getkey('Kick'):FireServer(
-		getshotdirection(200, 0),
-		ball,
-		false,
-		true,
-		150,
-		side,
-		root.CFrame,
-		{},
-		false,
-		false
-	)
 end)																														
 
 run(function()
@@ -7171,6 +6817,521 @@ run(function()
 		clearvisuals()
 	end)
 end)
+
+local playersService = game:GetService('Players')
+local replicatedStorage = game:GetService('ReplicatedStorage')
+local workspaceService = game:GetService('Workspace')
+local inputService = game:GetService('UserInputService')
+
+local lplr = playersService.LocalPlayer
+local knitservices = {
+	knit = nil,
+	keyhandler = nil,
+	keys = {}
+}
+
+local animcache = {
+	animator = nil,
+	animtype = nil,
+	tracks = {}
+}
+
+local function getcategory()
+	return vape.Categories.InstantActions or vape.Categories['Instant actions']
+end
+
+local function getkey(keyname)
+	if not knitservices.knit then
+		local knit = require(replicatedStorage.Packages.Knit)
+		knit.OnStart():await()
+		knitservices.knit = knit
+		knitservices.keyhandler = knit.GetService('KeyHandlerService')
+	end
+
+	if not knitservices.keys[keyname] then
+		knitservices.keys[keyname] = knitservices.keyhandler:GetKey(keyname)
+	end
+
+	return knitservices.keys[keyname]
+end
+
+local function getcharacter()
+	return lplr.Character
+end
+
+local function getroot()
+	local character = getcharacter()
+	return character and character:FindFirstChild('HumanoidRootPart')
+end
+
+local function gethumanoid()
+	local character = getcharacter()
+	return character and character:FindFirstChildOfClass('Humanoid')
+end
+
+local function getanimator()
+	local humanoid = gethumanoid()
+	if not humanoid then return end
+	return humanoid:FindFirstChildOfClass('Animator') or humanoid:FindFirstChild('Animator')
+end
+
+local function getanimset()
+	local data = lplr:FindFirstChild('Data')
+	local animationtype = data and data:FindFirstChild('animationType')
+	local animfolder = replicatedStorage:FindFirstChild('AnimFolder')
+	local animtype = animationtype and animationtype.Value
+
+	if not animfolder or not animtype then return end
+	return animfolder:FindFirstChild(animtype), animtype
+end
+
+local function resetanimcache(animator, animtype)
+	if animcache.animator == animator and animcache.animtype == animtype then return end
+
+	for _, track in animcache.tracks do
+		pcall(function()
+			track:Stop()
+			track:Destroy()
+		end)
+	end
+
+	table.clear(animcache.tracks)
+	animcache.animator = animator
+	animcache.animtype = animtype
+end
+
+local function gettrack(name, priority)
+	local animator = getanimator()
+	local animset, animtype = getanimset()
+	if not animator or not animset then return end
+
+	resetanimcache(animator, animtype)
+
+	if not animcache.tracks[name] then
+		local object = animset:FindFirstChild(name)
+		if not object then return end
+
+		local track = animator:LoadAnimation(object)
+		if priority then
+			track.Priority = priority
+		end
+
+		animcache.tracks[name] = track
+	end
+
+	return animcache.tracks[name]
+end
+
+local function playtrack(name, priority, fade, weight, speed)
+	local track = gettrack(name, priority)
+	if track then
+		track:Play(fade or 0, weight or 1, speed or 1)
+	end
+	return track
+end
+
+local function playassetanimation(id, priority, fade, weight, speed)
+	local animator = getanimator()
+	if not animator then return end
+
+	local animation = Instance.new('Animation')
+	animation.AnimationId = id
+
+	local track = animator:LoadAnimation(animation)
+	if priority then
+		track.Priority = priority
+	end
+
+	track:Play(fade or 0, weight or 1, speed or 1)
+
+	task.delay(5, function()
+		pcall(function()
+			track:Destroy()
+			animation:Destroy()
+		end)
+	end)
+
+	return track
+end
+
+local function getball()
+	local temp = workspaceService:FindFirstChild('Temp')
+	return temp and temp:FindFirstChild('Ball')
+end
+
+local function getfeetposition()
+	local character = getcharacter()
+	local root = getroot()
+	if not character or not root then return end
+
+	local left = character:FindFirstChild('LeftFoot') or character:FindFirstChild('Left Leg')
+	local right = character:FindFirstChild('RightFoot') or character:FindFirstChild('Right Leg')
+
+	if left and right then
+		return (left.Position + right.Position) / 2
+	end
+
+	if left then
+		return left.Position
+	end
+
+	if right then
+		return right.Position
+	end
+
+	return root.Position - Vector3.new(0, 3, 0)
+end
+
+local function getside(ball, root)
+	local direction = root.Position * Vector3.new(1, 0, 1) - ball.Position * Vector3.new(1, 0, 1)
+	if direction.Magnitude <= 0 then
+		return 'Right'
+	end
+	return root.CFrame.RightVector:Dot(direction.Unit) > 0 and 'Left' or 'Right'
+end
+
+local function canfire(mode, distance)
+	if mode.Value == 'Blatant' then return true end
+
+	local ball = getball()
+	local feet = getfeetposition()
+	if not ball or not feet then return false end
+
+	return (ball.Position - feet).Magnitude <= distance.Value
+end
+
+local function getshotdirection(magnitude, elevation)
+	local root = getroot()
+	if not root then
+		return Vector3.new(0, elevation or 0, -magnitude)
+	end
+
+	local look = root.CFrame.LookVector
+	if look.Magnitude <= 0 then
+		return Vector3.new(0, elevation or 0, -magnitude)
+	end
+
+	return look.Unit * magnitude + Vector3.new(0, elevation or 0, 0)
+end
+
+local function getmousedirection()
+	local camera = workspaceService.CurrentCamera
+	local location = inputService:GetMouseLocation()
+
+	if camera then
+		return camera:ViewportPointToRay(location.X, location.Y).Direction
+	end
+
+	local root = getroot()
+	return root and root.CFrame.LookVector or Vector3.zero
+end
+
+local function disablesoon(module)
+	task.delay(0.2, function()
+		if module and module.Enabled then
+			module:Toggle()
+		end
+	end)
+end
+
+local function playpowershot(side)
+	local left = inputService:IsKeyDown(Enum.KeyCode.A)
+	local right = inputService:IsKeyDown(Enum.KeyCode.D)
+	local name = side == 'Left' and 'PowerShotExtraL' or 'PowerShotExtraR'
+
+	if left then
+		name = 'PowerShotExtraLL'
+	elseif right then
+		name = 'PowerShotExtraRR'
+	end
+
+	playtrack(name, Enum.AnimationPriority.Action2, 0, 1, 1)
+end
+
+local function playchip(side)
+	playtrack(side == 'Left' and 'TapIn_ChipLeft' or 'TapIn_ChipRight', Enum.AnimationPriority.Action, 0, 1, 1)
+end
+
+local function playheader()
+	playtrack('Header', Enum.AnimationPriority.Action2, 0, 1, 1)
+end
+
+run(function()
+	local category = getcategory()
+	if not category then return end
+
+	local InstaPowerShot
+	local Mode
+	local Distance
+
+	InstaPowerShot = category:CreateModule({
+		Name = 'InstaPowerShot',
+		Tooltip = 'Instant 100% charge power shot',
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					if not canfire(Mode, Distance) then
+						disablesoon(InstaPowerShot)
+						return
+					end
+
+					local ball = getball()
+					local root = getroot()
+
+					if not ball or not root then
+						disablesoon(InstaPowerShot)
+						return
+					end
+
+					playassetanimation('rbxassetid://15434792076', Enum.AnimationPriority.Action2, 0, 1, 1)
+
+					getkey('Kick'):FireServer(
+						getmousedirection(),
+						ball,
+						false,
+						true,
+						100,
+						'Left',
+						root.CFrame
+					)
+
+					disablesoon(InstaPowerShot)
+				end)
+			end
+		end
+	})
+
+	Mode = InstaPowerShot:CreateDropdown({
+		Name = 'Mode',
+		List = {'Legit', 'Blatant'},
+		Default = 'Legit'
+	})
+
+	Distance = InstaPowerShot:CreateSlider({
+		Name = 'Distance',
+		Min = 1,
+		Max = 15,
+		Default = 6.1,
+		Decimal = 10,
+		Suffix = 'studs'
+	})
+end)
+
+run(function()
+	local category = getcategory()
+	if not category then return end
+
+	local Header
+	local Mode
+	local HeaderMode
+	local Distance
+
+	Header = category:CreateModule({
+		Name = 'Header',
+		Tooltip = 'Instant header',
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					if not canfire(Mode, Distance) then
+						disablesoon(Header)
+						return
+					end
+
+					local ball = getball()
+					local root = getroot()
+					local humanoid = gethumanoid()
+
+					if not ball or not root then
+						disablesoon(Header)
+						return
+					end
+
+					if HeaderMode.Value == 'Jump' and humanoid then
+						humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+						humanoid.Jump = true
+						task.wait(0.25)
+					end
+
+					playheader()
+					task.wait(0.1)
+
+					if not ball:IsDescendantOf(workspaceService) then
+						disablesoon(Header)
+						return
+					end
+
+					getkey('Header'):FireServer(getshotdirection(90, 7.5), ball)
+					disablesoon(Header)
+				end)
+			end
+		end
+	})
+
+	Mode = Header:CreateDropdown({
+		Name = 'Mode',
+		List = {'Legit', 'Blatant'},
+		Default = 'Legit'
+	})
+
+	HeaderMode = Header:CreateDropdown({
+		Name = 'Header Mode',
+		List = {'Jump', 'Normal'},
+		Default = 'Jump'
+	})
+
+	Distance = Header:CreateSlider({
+		Name = 'Distance',
+		Min = 1,
+		Max = 15,
+		Default = 6.1,
+		Decimal = 10,
+		Suffix = 'studs'
+	})
+end)
+
+run(function()
+	local category = getcategory()
+	if not category then return end
+
+	local Chip
+	local Mode
+	local Distance
+
+	Chip = category:CreateModule({
+		Name = 'Chip',
+		Tooltip = 'Instant chip/lob shot',
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					if not canfire(Mode, Distance) then
+						disablesoon(Chip)
+						return
+					end
+
+					local ball = getball()
+					local root = getroot()
+
+					if not ball or not root then
+						disablesoon(Chip)
+						return
+					end
+
+					local side = getside(ball, root)
+					playchip(side)
+
+					getkey('Kick'):FireServer(
+						getshotdirection(40.58, 22.85638999938965),
+						ball,
+						false,
+						false,
+						32.77347094472498,
+						side,
+						root.CFrame,
+						{
+							Enum.KeyCode.W,
+							Enum.KeyCode.LeftShift
+						},
+						false,
+						false
+					)
+
+					disablesoon(Chip)
+				end)
+			end
+		end
+	})
+
+	Mode = Chip:CreateDropdown({
+		Name = 'Mode',
+		List = {'Legit', 'Blatant'},
+		Default = 'Legit'
+	})
+
+	Distance = Chip:CreateSlider({
+		Name = 'Distance',
+		Min = 1,
+		Max = 15,
+		Default = 6.1,
+		Decimal = 10,
+		Suffix = 'studs'
+	})
+end)
+
+run(function()
+	local category = getcategory()
+	if not category then return end
+
+	local OverCharge
+	local Mode
+	local Distance
+
+	OverCharge = category:CreateModule({
+		Name = 'OverCharge',
+		Tooltip = 'Instant overcharge kick',
+		Function = function(callback)
+			if callback then
+				task.spawn(function()
+					if not canfire(Mode, Distance) then
+						disablesoon(OverCharge)
+						return
+					end
+
+					local ball = getball()
+					local root = getroot()
+
+					if not ball or not root then
+						disablesoon(OverCharge)
+						return
+					end
+
+					local side = getside(ball, root)
+					playpowershot(side)
+
+					pcall(function()
+						getkey('PowerShot'):FireServer()
+					end)
+
+					task.wait(0.6)
+
+					if not ball:IsDescendantOf(workspaceService) then
+						disablesoon(OverCharge)
+						return
+					end
+
+					getkey('Kick'):FireServer(
+						getshotdirection(200, 0),
+						ball,
+						false,
+						true,
+						150,
+						side,
+						root.CFrame,
+						{},
+						false,
+						false
+					)
+
+					disablesoon(OverCharge)
+				end)
+			end
+		end
+	})
+
+	Mode = OverCharge:CreateDropdown({
+		Name = 'Mode',
+		List = {'Legit', 'Blatant'},
+		Default = 'Legit'
+	})
+
+	Distance = OverCharge:CreateSlider({
+		Name = 'Distance',
+		Min = 1,
+		Max = 15,
+		Default = 6.1,
+		Decimal = 10,
+		Suffix = 'studs'
+	})
+end)	
 																			
 run(function()
 	local Atmosphere
