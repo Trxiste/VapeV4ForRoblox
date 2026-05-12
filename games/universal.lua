@@ -6836,6 +6836,8 @@ local animcache = {
 	tracks = {}
 }
 
+local hitboxhandler
+
 local function getcategory()
 	return vape.Categories.InstantActions or vape.Categories['Instant actions']
 end
@@ -6954,6 +6956,25 @@ local function playassetanimation(id, priority, fade, weight, speed)
 	return track
 end
 
+local function gethitboxhandler()
+	if hitboxhandler then return hitboxhandler end
+
+	local modules = replicatedStorage:FindFirstChild('Modules')
+	local handler = modules and modules:FindFirstChild('HitboxHandler', true)
+
+	if handler then
+		local suc, res = pcall(function()
+			return require(handler)
+		end)
+
+		if suc then
+			hitboxhandler = res
+		end
+	end
+
+	return hitboxhandler
+end
+
 local function getball()
 	local temp = workspaceService:FindFirstChild('Temp')
 	return temp and temp:FindFirstChild('Ball')
@@ -7035,12 +7056,56 @@ local function jump()
 	humanoid.Jump = true
 end
 
-local function disablesoon(module)
-	task.delay(0.2, function()
-		if module and module.Enabled then
-			module:Toggle()
+local function getcharge()
+	local character = getcharacter()
+	local handler = character and character:FindFirstChild('CharacterHandler')
+	handler = handler and handler:FindFirstChild('ClientHandler')
+
+	if handler and getsenv then
+		local suc, env = pcall(getsenv, handler)
+		if suc and type(env) == 'table' then
+			local charge = math.max(env.ChargeNormal or 0, env.ChargePower or 0, env.ChargeLeft or 0, env.ChargeRight or 0)
+			return charge > 0 and charge or 35
 		end
-	end)
+	end
+
+	return 35
+end
+
+local function getbicyclevelocity(root)
+	local charge = getcharge()
+	if charge <= 25 then
+		charge = 35
+	end
+
+	local direction = -root.CFrame.LookVector
+	if direction.Magnitude <= 0 then
+		direction = Vector3.new(0, 0, 1)
+	end
+
+	local power = math.clamp(charge * 2.25, 35, 120)
+	return direction.Unit * (20 + power * 1.15) + Vector3.new(0, -20, 0)
+end
+
+local function getbicyclehit(ball, root)
+	local handler = gethitboxhandler()
+
+	if handler and type(handler.Create) == 'function' then
+		local hit = handler.Create({
+			cframe = root.CFrame * CFrame.new(0, 2, 1),
+			size = Vector3.new(5, 4.5, 6)
+		})
+
+		return hit or ball
+	end
+
+	return ball
+end
+
+local function turnoff(module)
+	if module and module.Enabled then
+		module:Toggle()
+	end
 end
 
 local function playpowershot(side)
@@ -7065,6 +7130,10 @@ local function playheader()
 	playtrack('Header', Enum.AnimationPriority.Action2, 0, 1, 1)
 end
 
+local function playbicycle()
+	playtrack(math.random(1, 2) == 1 and 'Bicycle1' or 'Bicycle2', Enum.AnimationPriority.Action2, 0, 1, 1)
+end
+
 local function createinstant(name, tooltip, func, extra)
 	run(function()
 		local category = getcategory()
@@ -7079,22 +7148,16 @@ local function createinstant(name, tooltip, func, extra)
 			Tooltip = tooltip,
 			Function = function(callback)
 				if callback then
+					turnoff(module)
+
 					task.spawn(function()
-						if not canfire(mode, distance) then
-							disablesoon(module)
-							return
-						end
+						if not canfire(mode, distance) then return end
 
 						local ball = getball()
 						local root = getroot()
 
-						if not ball or not root then
-							disablesoon(module)
-							return
-						end
-
+						if not ball or not root then return end
 						func(module, ball, root, getside(ball, root))
-						disablesoon(module)
 					end)
 				end
 			end
@@ -7141,17 +7204,13 @@ createinstant('Header', 'Instant header', function(module, ball, root)
 	if jumpoption and jumpoption.Enabled then
 		jump()
 		task.wait(0.25)
-
-		if not module.Enabled then return end
 		if not ball:IsDescendantOf(workspaceService) then return end
 	end
 
 	playheader()
-	task.wait(0.01)
+	task.wait(0.1)
 
-	if not module.Enabled then return end
 	if not ball:IsDescendantOf(workspaceService) then return end
-
 	getkey('Header'):FireServer(getshotdirection(90, 7.5), ball)
 end, function(module)
 	module:CreateToggle({
@@ -7189,7 +7248,6 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 
 	task.wait(0.6)
 
-	if not module.Enabled then return end
 	if not ball:IsDescendantOf(workspaceService) then return end
 
 	getkey('Kick'):FireServer(
@@ -7204,7 +7262,30 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 		false,
 		false
 	)
-end)			
+end)
+
+createinstant('Bicycle', ' instant bicycle', function(module, ball, root)
+	local autojump = module.Options and module.Options.AutoJump
+
+	if autojump and autojump.Enabled then
+		jump()
+		task.wait(0.01)
+		if not ball:IsDescendantOf(workspaceService) then return end
+	end
+
+	playbicycle()
+
+	local hit = getbicyclehit(ball, root)
+	if not hit then return end
+
+	getkey('Bicycle'):FireServer()
+	getkey('BicycleHit'):FireServer(getbicyclevelocity(root), hit)
+end, function(module)
+	module:CreateToggle({
+		Name = 'AutoJump',
+		Default = true
+	})
+end)		
 																			
 run(function()
 	local Atmosphere
