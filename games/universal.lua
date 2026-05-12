@@ -3447,6 +3447,12 @@ run(function()
 	local textcolor = Color3.fromHSV(0.16, 1, 1)
 	local playerconnections = {}
 	local objects = {}
+	local enabled = false
+
+	if shared.vapeskillespclean then
+		pcall(shared.vapeskillespclean)
+		shared.vapeskillespclean = nil
+	end
 
 	local function getskill(plr)
 		local data = plr:FindFirstChild('Data')
@@ -3458,9 +3464,11 @@ run(function()
 		local obj = objects[plr]
 		if obj then
 			if obj.Text then
+				obj.Text.Visible = false
 				obj.Text:Remove()
 			end
 			if obj.Background then
+				obj.Background.Visible = false
 				obj.Background:Remove()
 			end
 			objects[plr] = nil
@@ -3468,7 +3476,7 @@ run(function()
 	end
 
 	local function create(plr)
-		if not Drawing then return end
+		if not Drawing or not enabled then return end
 
 		local text = Drawing.new('Text')
 		text.Size = 16
@@ -3494,7 +3502,7 @@ run(function()
 	end
 
 	local function updateplayer(plr)
-		if plr == lplr then return end
+		if not enabled or plr == lplr then return end
 
 		local obj = objects[plr] or create(plr)
 		if not obj then return end
@@ -3530,8 +3538,19 @@ run(function()
 		end
 	end
 
+	local function clear()
+		for plr in objects do
+			remove(plr)
+		end
+	end
+
 	local function update()
-		for _, plr in playersService:GetPlayers() do
+		if not enabled then
+			clear()
+			return
+		end
+
+		for _, plr in ipairs(playersService:GetPlayers()) do
 			if plr ~= lplr then
 				updateplayer(plr)
 			end
@@ -3545,7 +3564,7 @@ run(function()
 	end
 
 	local function bind(plr)
-		if plr == lplr or playerconnections[plr] then return end
+		if not enabled or plr == lplr or playerconnections[plr] then return end
 		playerconnections[plr] = plr.CharacterAdded:Connect(function()
 			remove(plr)
 		end)
@@ -3560,37 +3579,42 @@ run(function()
 		remove(plr)
 	end
 
-	local function clear()
-		for plr in objects do
-			remove(plr)
-		end
-	end
-
 	local function stop()
+		enabled = false
+
 		if connection then
 			connection:Disconnect()
 			connection = nil
 		end
+
 		if addedconnection then
 			addedconnection:Disconnect()
 			addedconnection = nil
 		end
+
 		if removingconnection then
 			removingconnection:Disconnect()
 			removingconnection = nil
 		end
+
 		for plr, conn in playerconnections do
 			conn:Disconnect()
 			playerconnections[plr] = nil
 		end
+
 		clear()
 	end
+
+	shared.vapeskillespclean = stop
 
 	skillesp = vape.Categories.Render:CreateModule({
 		Name = 'SkillESP',
 		Function = function(callback)
 			if callback then
-				for _, plr in playersService:GetPlayers() do
+				stop()
+				enabled = true
+
+				for _, plr in ipairs(playersService:GetPlayers()) do
 					bind(plr)
 				end
 
@@ -3618,7 +3642,11 @@ run(function()
 		DefaultValue = 1,
 		Function = function(hue, sat, val)
 			textcolor = Color3.fromHSV(hue, sat, val)
-			update()
+			if enabled then
+				update()
+			else
+				clear()
+			end
 		end,
 		Tooltip = 'Color of the skill text'
 	})
@@ -3630,7 +3658,7 @@ run(function()
 	})
 
 	skillesp:Clean(stop)
-end)
+end)																																			
 
 run(function()
     local Sprint
