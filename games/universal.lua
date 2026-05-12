@@ -7184,7 +7184,7 @@ local function createinstant(name, tooltip, func, extra)
 	end)
 end
 
-createinstant('InstaPowerShot', 'Instant 100% charge power shot', function(module, ball, root)
+createinstant('InstaPowerShot', 'Instant powershot', function(module, ball, root)
 	getkey('Kick'):FireServer(
 		getmousedirection(),
 		ball,
@@ -7198,7 +7198,7 @@ createinstant('InstaPowerShot', 'Instant 100% charge power shot', function(modul
 	playassetanimation('rbxassetid://15434792076', Enum.AnimationPriority.Action2, 0, 1, 1)
 end)
 
-createinstant('Header', 'Instant header', function(module, ball, root)
+createinstant('Header', 'Instant Header', function(module, ball, root)
 	local jumpoption = module.Options and module.Options.Jump
 
 	if jumpoption and jumpoption.Enabled then
@@ -7219,7 +7219,7 @@ end, function(module)
 	})
 end)
 
-createinstant('Chip', 'Instant chip/lob shot', function(module, ball, root, side)
+createinstant('Chip', 'Instant Chip', function(module, ball, root, side)
 	playchip(side)
 
 	getkey('Kick'):FireServer(
@@ -7239,7 +7239,7 @@ createinstant('Chip', 'Instant chip/lob shot', function(module, ball, root, side
 	)
 end)
 
-createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, root, side)
+createinstant('OverCharge', 'Instant OverCharge', function(module, ball, root, side)
 	playpowershot(side)
 
 	pcall(function()
@@ -7264,7 +7264,7 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 	)
 end)
 
-createinstant('Bicycle', ' instant bicycle', function(module, ball, root)
+createinstant('Bicycle', 'Instant Bicycle', function(module, ball, root)
 	local jumpoption = module.Options and module.Options.Jump
 
 	if jumpoption and jumpoption.Enabled then
