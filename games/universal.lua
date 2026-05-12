@@ -7265,9 +7265,9 @@ createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, ro
 end)
 
 createinstant('Bicycle', ' instant bicycle', function(module, ball, root)
-	local autojump = module.Options and module.Options.AutoJump
+	local jumpoption = module.Options and module.Options.Jump
 
-	if autojump and autojump.Enabled then
+	if jumpoption and jumpoption.Enabled then
 		jump()
 		task.wait(0.01)
 		if not ball:IsDescendantOf(workspaceService) then return end
@@ -7282,10 +7282,10 @@ createinstant('Bicycle', ' instant bicycle', function(module, ball, root)
 	getkey('BicycleHit'):FireServer(getbicyclevelocity(root), hit)
 end, function(module)
 	module:CreateToggle({
-		Name = 'AutoJump',
+		Name = 'Jump',
 		Default = true
 	})
-end)		
+end)	
 																			
 run(function()
 	local Atmosphere
