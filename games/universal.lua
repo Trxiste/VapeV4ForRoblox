@@ -7147,7 +7147,7 @@ createinstant('Header', 'Instant header', function(module, ball, root)
 	end
 
 	playheader()
-	task.wait(0.1)
+	task.wait(0.03)
 
 	if not module.Enabled then return end
 	if not ball:IsDescendantOf(workspaceService) then return end
