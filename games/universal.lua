@@ -6987,6 +6987,7 @@ local function getside(ball, root)
 	if direction.Magnitude <= 0 then
 		return 'Right'
 	end
+
 	return root.CFrame.RightVector:Dot(direction.Unit) > 0 and 'Left' or 'Right'
 end
 
@@ -7026,6 +7027,14 @@ local function getmousedirection()
 	return root and root.CFrame.LookVector or Vector3.zero
 end
 
+local function jump()
+	local humanoid = gethumanoid()
+	if not humanoid then return end
+
+	humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	humanoid.Jump = true
+end
+
 local function disablesoon(module)
 	task.delay(0.2, function()
 		if module and module.Enabled then
@@ -7056,282 +7065,146 @@ local function playheader()
 	playtrack('Header', Enum.AnimationPriority.Action2, 0, 1, 1)
 end
 
-run(function()
-	local category = getcategory()
-	if not category then return end
+local function createinstant(name, tooltip, func, extra)
+	run(function()
+		local category = getcategory()
+		if not category then return end
 
-	local InstaPowerShot
-	local Mode
-	local Distance
+		local module
+		local mode
+		local distance
 
-	InstaPowerShot = category:CreateModule({
-		Name = 'InstaPowerShot',
-		Tooltip = 'Instant 100% charge power shot',
-		Function = function(callback)
-			if callback then
-				task.spawn(function()
-					if not canfire(Mode, Distance) then
-						disablesoon(InstaPowerShot)
-						return
-					end
+		module = category:CreateModule({
+			Name = name,
+			Tooltip = tooltip,
+			Function = function(callback)
+				if callback then
+					task.spawn(function()
+						if not canfire(mode, distance) then
+							disablesoon(module)
+							return
+						end
 
-					local ball = getball()
-					local root = getroot()
+						local ball = getball()
+						local root = getroot()
 
-					if not ball or not root then
-						disablesoon(InstaPowerShot)
-						return
-					end
+						if not ball or not root then
+							disablesoon(module)
+							return
+						end
 
-					playassetanimation('rbxassetid://15434792076', Enum.AnimationPriority.Action2, 0, 1, 1)
-
-					getkey('Kick'):FireServer(
-						getmousedirection(),
-						ball,
-						false,
-						true,
-						100,
-						'Left',
-						root.CFrame
-					)
-
-					disablesoon(InstaPowerShot)
-				end)
-			end
-		end
-	})
-
-	Mode = InstaPowerShot:CreateDropdown({
-		Name = 'Mode',
-		List = {'Legit', 'Blatant'},
-		Default = 'Legit'
-	})
-
-	Distance = InstaPowerShot:CreateSlider({
-		Name = 'Distance',
-		Min = 1,
-		Max = 15,
-		Default = 6.1,
-		Decimal = 10,
-		Suffix = 'studs'
-	})
-end)
-
-run(function()
-	local category = getcategory()
-	if not category then return end
-
-	local Header
-	local Mode
-	local HeaderMode
-	local Distance
-
-	Header = category:CreateModule({
-		Name = 'Header',
-		Tooltip = 'Instant header',
-		Function = function(callback)
-			if callback then
-				task.spawn(function()
-					if not canfire(Mode, Distance) then
-						disablesoon(Header)
-						return
-					end
-
-					local ball = getball()
-					local root = getroot()
-					local humanoid = gethumanoid()
-
-					if not ball or not root then
-						disablesoon(Header)
-						return
-					end
-
-					if HeaderMode.Value == 'Jump' and humanoid then
-						humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-						humanoid.Jump = true
-						task.wait(0.25)
-					end
-
-					playheader()
-					task.wait(0.1)
-
-					if not ball:IsDescendantOf(workspaceService) then
-						disablesoon(Header)
-						return
-					end
-
-					getkey('Header'):FireServer(getshotdirection(90, 7.5), ball)
-					disablesoon(Header)
-				end)
-			end
-		end
-	})
-
-	Mode = Header:CreateDropdown({
-		Name = 'Mode',
-		List = {'Legit', 'Blatant'},
-		Default = 'Legit'
-	})
-
-	HeaderMode = Header:CreateDropdown({
-		Name = 'Header Mode',
-		List = {'Jump', 'Normal'},
-		Default = 'Jump'
-	})
-
-	Distance = Header:CreateSlider({
-		Name = 'Distance',
-		Min = 1,
-		Max = 15,
-		Default = 6.1,
-		Decimal = 10,
-		Suffix = 'studs'
-	})
-end)
-
-run(function()
-	local category = getcategory()
-	if not category then return end
-
-	local Chip
-	local Mode
-	local Distance
-
-	Chip = category:CreateModule({
-		Name = 'Chip',
-		Tooltip = 'Instant chip/lob shot',
-		Function = function(callback)
-			if callback then
-				task.spawn(function()
-					if not canfire(Mode, Distance) then
-						disablesoon(Chip)
-						return
-					end
-
-					local ball = getball()
-					local root = getroot()
-
-					if not ball or not root then
-						disablesoon(Chip)
-						return
-					end
-
-					local side = getside(ball, root)
-					playchip(side)
-
-					getkey('Kick'):FireServer(
-						getshotdirection(40.58, 22.85638999938965),
-						ball,
-						false,
-						false,
-						32.77347094472498,
-						side,
-						root.CFrame,
-						{
-							Enum.KeyCode.W,
-							Enum.KeyCode.LeftShift
-						},
-						false,
-						false
-					)
-
-					disablesoon(Chip)
-				end)
-			end
-		end
-	})
-
-	Mode = Chip:CreateDropdown({
-		Name = 'Mode',
-		List = {'Legit', 'Blatant'},
-		Default = 'Legit'
-	})
-
-	Distance = Chip:CreateSlider({
-		Name = 'Distance',
-		Min = 1,
-		Max = 15,
-		Default = 6.1,
-		Decimal = 10,
-		Suffix = 'studs'
-	})
-end)
-
-run(function()
-	local category = getcategory()
-	if not category then return end
-
-	local OverCharge
-	local Mode
-	local Distance
-
-	OverCharge = category:CreateModule({
-		Name = 'OverCharge',
-		Tooltip = 'Instant overcharge kick',
-		Function = function(callback)
-			if callback then
-				task.spawn(function()
-					if not canfire(Mode, Distance) then
-						disablesoon(OverCharge)
-						return
-					end
-
-					local ball = getball()
-					local root = getroot()
-
-					if not ball or not root then
-						disablesoon(OverCharge)
-						return
-					end
-
-					local side = getside(ball, root)
-					playpowershot(side)
-
-					pcall(function()
-						getkey('PowerShot'):FireServer()
+						func(module, ball, root, getside(ball, root))
+						disablesoon(module)
 					end)
-
-					task.wait(0.6)
-
-					if not ball:IsDescendantOf(workspaceService) then
-						disablesoon(OverCharge)
-						return
-					end
-
-					getkey('Kick'):FireServer(
-						getshotdirection(200, 0),
-						ball,
-						false,
-						true,
-						150,
-						side,
-						root.CFrame,
-						{},
-						false,
-						false
-					)
-
-					disablesoon(OverCharge)
-				end)
+				end
 			end
+		})
+
+		mode = module:CreateDropdown({
+			Name = 'Mode',
+			List = {'Legit', 'Blatant'},
+			Default = 'Legit'
+		})
+
+		if extra then
+			extra(module)
 		end
-	})
 
-	Mode = OverCharge:CreateDropdown({
-		Name = 'Mode',
-		List = {'Legit', 'Blatant'},
-		Default = 'Legit'
-	})
+		distance = module:CreateSlider({
+			Name = 'Distance',
+			Min = 1,
+			Max = 15,
+			Default = 6.1,
+			Decimal = 10,
+			Suffix = 'studs'
+		})
+	end)
+end
 
-	Distance = OverCharge:CreateSlider({
-		Name = 'Distance',
-		Min = 1,
-		Max = 15,
-		Default = 6.1,
-		Decimal = 10,
-		Suffix = 'studs'
+createinstant('InstaPowerShot', 'Instant 100% charge power shot', function(module, ball, root)
+	getkey('Kick'):FireServer(
+		getmousedirection(),
+		ball,
+		false,
+		true,
+		100,
+		'Left',
+		root.CFrame
+	)
+
+	playassetanimation('rbxassetid://15434792076', Enum.AnimationPriority.Action2, 0, 1, 1)
+end)
+
+createinstant('Header', 'Instant header', function(module, ball, root)
+	local jumpoption = module.Options and module.Options.Jump
+
+	if jumpoption and jumpoption.Enabled then
+		jump()
+		task.wait(0.25)
+
+		if not module.Enabled then return end
+		if not ball:IsDescendantOf(workspaceService) then return end
+	end
+
+	playheader()
+	task.wait(0.1)
+
+	if not module.Enabled then return end
+	if not ball:IsDescendantOf(workspaceService) then return end
+
+	getkey('Header'):FireServer(getshotdirection(90, 7.5), ball)
+end, function(module)
+	module:CreateToggle({
+		Name = 'Jump',
+		Default = true
 	})
-end)	
+end)
+
+createinstant('Chip', 'Instant chip/lob shot', function(module, ball, root, side)
+	playchip(side)
+
+	getkey('Kick'):FireServer(
+		getshotdirection(40.58, 22.85638999938965),
+		ball,
+		false,
+		false,
+		32.77347094472498,
+		side,
+		root.CFrame,
+		{
+			Enum.KeyCode.W,
+			Enum.KeyCode.LeftShift
+		},
+		false,
+		false
+	)
+end)
+
+createinstant('OverCharge', 'Instant overcharge kick', function(module, ball, root, side)
+	playpowershot(side)
+
+	pcall(function()
+		getkey('PowerShot'):FireServer()
+	end)
+
+	task.wait(0.6)
+
+	if not module.Enabled then return end
+	if not ball:IsDescendantOf(workspaceService) then return end
+
+	getkey('Kick'):FireServer(
+		getshotdirection(200, 0),
+		ball,
+		false,
+		true,
+		150,
+		side,
+		root.CFrame,
+		{},
+		false,
+		false
+	)
+end)			
 																			
 run(function()
 	local Atmosphere
