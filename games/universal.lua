@@ -3065,7 +3065,7 @@ run(function()
 		end
 	end
 	
-	local Noclip = vape.Categories.Blatant:CreateModule({
+	local Noclip = vape.Categories.Utility:CreateModule({
 		Name = 'SuperBodyBlock',
 		Function = function(callback)
 			Enabled = callback
