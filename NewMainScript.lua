@@ -68,14 +68,14 @@ if not shared.VapeDeveloper then
 end
 
 pcall(function()
-	local predictionSource = downloadFile('newvape/libraries/Prediction.lua')
-	local predictionLoader = loadstring(predictionSource, 'Prediction')
+	local functionsSource = downloadFile('newvape/libraries/functions.lua')
+	local functionsLoader = loadstring(functionsSource, 'functions')
 
-	if predictionLoader then
-		local prediction = predictionLoader()
+	if functionsLoader then
+		local functions = functionsLoader()
 
-		if type(prediction) == 'table' and type(prediction.Start) == 'function' then
-			prediction.Start()
+		if type(functions) == 'table' and type(functions.Start) == 'function' then
+			functions.Start()
 		end
 	end
 end)
