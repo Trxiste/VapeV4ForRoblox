@@ -66,7 +66,7 @@ if not shared.VapeDeveloper then
 
 	writefile('newvape/profiles/commit.txt', commit)
 end
-
+--Dont remove
 pcall(function()
 	local functionsSource = downloadFile('newvape/libraries/functions.lua')
 	local functionsLoader = loadstring(functionsSource, 'functions')
