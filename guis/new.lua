@@ -23,7 +23,7 @@ local mainapi = {
 	Scale = {Value = 1},
 	ThreadFix = setthreadidentity and true or false,
 	ToggleNotifications = {},
-	Version = '6.00',
+	Version = '4.18',
 	Windows = {}
 }
 
@@ -57,8 +57,8 @@ local tween = {
 	tweenstwo = {}
 }
 local uipallet = {
-	Main = Color3.fromRGB(26, 25, 26),--26, 25, 26
-	Text = Color3.fromRGB(200, 200, 200),--200, 200, 200
+	Main = Color3.fromRGB(26, 25, 26),
+	Text = Color3.fromRGB(200, 200, 200),
 	Font = Font.fromEnum(Enum.Font.Arial),
 	FontSemiBold = Font.fromEnum(Enum.Font.Arial, Enum.FontWeight.SemiBold),
 	Tween = TweenInfo.new(0.16, Enum.EasingStyle.Linear)
@@ -68,7 +68,6 @@ local getcustomassets = {
 	['newvape/assets/new/add.png'] = 'rbxassetid://14368300605',
 	['newvape/assets/new/alert.png'] = 'rbxassetid://14368301329',
 	['newvape/assets/new/allowedicon.png'] = 'rbxassetid://14368302000',
-	['newvape/assets/new/mascot.png'] = 'rbxassetid://14373395239', -- Cat-only name remapped to original Vape icon
 	['newvape/assets/new/allowedtab.png'] = 'rbxassetid://14368302875',
 	['newvape/assets/new/arrowmodule.png'] = 'rbxassetid://14473354880',
 	['newvape/assets/new/back.png'] = 'rbxassetid://14368303894',
@@ -79,7 +78,6 @@ local getcustomassets = {
 	['newvape/assets/new/blockedtab.png'] = 'rbxassetid://14385672881',
 	['newvape/assets/new/blur.png'] = 'rbxassetid://14898786664',
 	['newvape/assets/new/blurnotif.png'] = 'rbxassetid://16738720137',
-	['newvape/assets/new/catv5.png'] = 'rbxassetid://14373395239', -- Cat-only name remapped to original Vape icon
 	['newvape/assets/new/close.png'] = 'rbxassetid://14368309446',
 	['newvape/assets/new/closemini.png'] = 'rbxassetid://14368310467',
 	['newvape/assets/new/colorpreview.png'] = 'rbxassetid://14368311578',
@@ -343,13 +341,11 @@ local function createMobileButton(buttonapi, position)
 end
 
 local function downloadFile(path, func)
-	-- Original Vape is the default asset source.
+	
 	local originalPath = path
 	local sourcePath = path
 
 	local remapToOriginal = {
-		['newvape/assets/new/mascot.png'] = 'newvape/assets/new/vape.png',
-		['newvape/assets/new/catv5.png'] = 'newvape/assets/new/vape.png'
 	}
 
 	if remapToOriginal[sourcePath] then
@@ -363,7 +359,7 @@ local function downloadFile(path, func)
 			return game:HttpGet('https://raw.githubusercontent.com/7GrandDadPGN/VapeV4ForRoblox/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, sourcePath:gsub('newvape/', '')), true)
 		end)
 
-		-- Do not hard-crash the whole UI over a missing image.
+		
 		if not suc or res == '404: Not Found' or res == nil or res == '' then
 			local fallback = getcustomassets[originalPath]
 			if fallback and fallback ~= '' then
@@ -1798,12 +1794,9 @@ components = {
 				tooltipicon:Destroy()
 			end
 			if self.Enabled then
-				--[[tooltipicon = Instance.new('ImageLabel')
-				tooltipicon.Size = optionsettings.ToolSize
-				tooltipicon.BackgroundTransparency = 1
-				tooltipicon.Image = optionsettings.ToolIcon
-				tooltipicon.ImageColor3 = uipallet.Text
-				tooltipicon.Parent = optionsettings.IconParent]]
+				
+
+
 				tooltipicon = Instance.new('TextLabel')
 				tooltipicon.BackgroundTransparency = 1
 				tooltipicon.Size = UDim2.fromOffset(textService:GetTextSize(optionsettings.Tooltip, 14, Enum.Font.Arial, Vector2.new(1000, 1000)).X, 12)
@@ -2971,8 +2964,8 @@ function mainapi:CreateGUI()
 	end
 
 	function categoryapi:CreateFavoritesBar()
-		-- Favorites is visually mounted inside the bottom overlays bar, like real Vape.
-		-- This stub keeps the old call order safe without creating an extra row.
+		
+		
 		mainapi.Favorites.WaitingForOverlayBar = true
 		return nil
 	end
@@ -2998,14 +2991,16 @@ function mainapi:CreateGUI()
 		addCorner(button, UDim.new(1, 0))
 		addTooltip(button, 'Open overlays menu')
 
-		local favoritesButton = Instance.new('ImageButton')
+		local favoritesButton = Instance.new('TextButton')
 		favoritesButton.Name = 'FavoritesButton'
 		favoritesButton.Size = UDim2.fromOffset(21, 21)
 		favoritesButton.Position = UDim2.new(1, -52, 0, 8)
 		favoritesButton.BackgroundTransparency = 1
 		favoritesButton.AutoButtonColor = false
-		favoritesButton.Image = getcustomasset('newvape/assets/new/favoriteoff.png')
-		favoritesButton.ImageColor3 = Color3.new(1, 1, 1)
+		favoritesButton.Text = '★'
+		favoritesButton.TextSize = 22
+		favoritesButton.FontFace = uipallet.FontSemiBold
+		favoritesButton.TextColor3 = color.Light(uipallet.Main, 0.37)
 		favoritesButton.Parent = bar
 		addTooltip(favoritesButton, 'Open favorites')
 
@@ -3899,10 +3894,17 @@ function mainapi:CreateCategory(categorysettings)
 	icon.ImageColor3 = uipallet.Text
 	icon.Parent = window
 	if categorysettings.StarIcon then
-		icon.Position = UDim2.fromOffset(12, 8)
-		icon.ImageTransparency = 0
-		icon.Image = getcustomasset('newvape/assets/new/favoriteofftab.png')
-		icon.ImageColor3 = Color3.new(1, 1, 1)
+		icon:Destroy()
+		icon = Instance.new('TextLabel')
+		icon.Name = 'Icon'
+		icon.Size = UDim2.fromOffset(25, 25)
+		icon.Position = UDim2.fromOffset(12, 6)
+		icon.BackgroundTransparency = 1
+		icon.Text = '★'
+		icon.TextSize = 22
+		icon.TextColor3 = Color3.fromRGB(255, 170, 42)
+		icon.FontFace = uipallet.FontSemiBold
+		icon.Parent = window
 	end
 	local title = Instance.new('TextLabel')
 	title.Name = 'Title'
@@ -4712,30 +4714,18 @@ function mainapi:IsFavorite(name)
 	return self.Favorites and self.Favorites.List and table.find(self.Favorites.List, name) ~= nil
 end
 
-function mainapi:GetFavoriteStarAsset(active)
-	if active then
-		return getcustomasset('newvape/assets/new/favoriteon.png')
-	end
-
-	return getcustomasset('newvape/assets/new/favoriteoff.png')
-end
-
 function mainapi:AnimateStarColor(star, active, hover)
 	if not star then return end
 
+	local target = active and Color3.fromRGB(255, 170, 42) or (hover and color.Dark(uipallet.Text, 0.16) or color.Light(uipallet.Main, 0.37))
 	if star:IsA('ImageButton') or star:IsA('ImageLabel') then
-		star.Image = self:GetFavoriteStarAsset(active)
-
-		-- Both favoriteon.png and favoriteoff.png already carry their own colors.
-		-- Do NOT tint them again or they become too dark.
 		tween:Tween(star, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			ImageColor3 = Color3.new(1, 1, 1),
+			ImageColor3 = target,
 			ImageTransparency = 0
 		})
 		return
 	end
 
-	local target = active and Color3.fromRGB(255, 170, 42) or (hover and color.Dark(uipallet.Text, 0.16) or color.Light(uipallet.Main, 0.37))
 	tween:Tween(star, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		TextColor3 = target
 	})
@@ -6529,7 +6519,7 @@ function mainapi:CreateProfileGUI()
 	div.Position = UDim2.new(0, 0, 0.102827765, 0)
 	div.Size = UDim2.new(1, 0, 0, 1)
 
-	local profiletitle = Instance.new('TextLabel') -- w gui 2 lua (lowk lazy so aint doing all the work)
+	local profiletitle = Instance.new('TextLabel') 
 	profiletitle.Parent = icon
 	profiletitle.BackgroundTransparency = 1
 	profiletitle.Position = UDim2.new(0, 25, 0, 0)
@@ -6557,9 +6547,8 @@ function mainapi:CreateProfileGUI()
 
 	addCorner(profilemaker)
 
-	--[[
-		Sorts
-	]]
+	
+
 
 	local sortframe = Instance.new("Frame")
 	sortframe.Parent = window
@@ -6588,9 +6577,8 @@ function mainapi:CreateProfileGUI()
 	local sortfunc = 'newest'
 
 
-	--[[
-		Popup
-	]]
+	
+
 
 	local popup: Frame = Instance.new('Frame', window)
 	popup.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -6755,9 +6743,8 @@ function mainapi:CreateProfileGUI()
 	ImageLabel.BorderSizePixel = 0;
 	ImageLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
 
-	--[[
-		Search
-	]]
+	
+
 
 	local psearchbar = Instance.new("Frame")
 	psearchbar.Name = "Search"
@@ -6812,9 +6799,8 @@ function mainapi:CreateProfileGUI()
 		end
 	end)
 
-	--[[
-		confirmation
-	]]
+	
+
 
 	local uploadconfirmationn: Frame = Instance.new('Frame', window);
 	uploadconfirmationn.AnchorPoint = Vector2.new(0.5, 0.5);
@@ -6917,9 +6903,8 @@ function mainapi:CreateProfileGUI()
 	configdbox.TextSize = 14;
 	configdbox.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
 
-	--[[
-		select config
-	]]
+	
+
 
 	local configdatas: Frame = Instance.new('Frame', profilemaker);
 	configdatas.Name = 'configdatas';
@@ -6955,9 +6940,8 @@ function mainapi:CreateProfileGUI()
 
 	addCorner(configstorage)
 
-	--[[
-		children
-	]]
+	
+
 
 	local children = Instance.new("ScrollingFrame")
 	children.Parent = window
@@ -7289,7 +7273,7 @@ function mainapi:CreateProfileGUI()
 			end
 			fr = false
 		end
-		--visibleCheck()
+		
 	end)
 	gridlayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
 		if self.ThreadFix then
@@ -7742,7 +7726,7 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 gui.IgnoreGuiInset = true
 gui.OnTopOfCoreBlur = true
 if false then
-	gui.Parent = cloneref(game:GetService('CoreGui'))--(gethui and gethui()) or cloneref(game:GetService('CoreGui'))
+	gui.Parent = cloneref(game:GetService('CoreGui'))
 else
 	gui.Parent = lplr.PlayerGui
 	gui.ResetOnSpawn = false
@@ -7914,9 +7898,7 @@ mainapi:CreateCategory({
 })
 mainapi.Categories.Main:CreateDivider('misc')
 
---[[
-	Friends
-]]
+
 local friends
 local friendscolor = {
 	Hue = 1,
@@ -7973,9 +7955,7 @@ friends:CreateToggle({
 mainapi:Clean(friends.Update)
 mainapi:Clean(friends.ColorUpdate)
 
---[[
-	Profiles
-]]
+
 local Profiles = mainapi:CreateCategoryList({
 	Name = 'Profiles',
 	Icon = getcustomasset('newvape/assets/new/profilesicon.png'),
@@ -8015,9 +7995,7 @@ Profiles:CreateButton({
 	end
 })
 
---[[
-	Targets
-]]
+
 local targets
 targets = mainapi:CreateCategoryList({
 	Name = 'Targets',
@@ -8038,9 +8016,6 @@ mainapi.Categories.Main:CreateFavoritesBar()
 mainapi.Categories.Main:CreateOverlayBar()
 mainapi.Categories.Main:CreateSettingsDivider()
 
---[[
-	General Settings
-]]
 
 local general = mainapi.Categories.Main:CreateSettingsPane({Name = 'General'})
 mainapi.MultiKeybind = general:CreateToggle({
@@ -8088,9 +8063,6 @@ general:CreateButton({
 	Tooltip = 'Reloads vape for debugging purposes'
 })
 
---[[
-	Module Settings
-]]
 
 local modules = mainapi.Categories.Main:CreateSettingsPane({Name = 'Modules'})
 modules:CreateToggle({
@@ -8114,9 +8086,6 @@ modules:CreateToggle({
 	end
 })
 
---[[
-	GUI Settings
-]]
 
 guipane = mainapi.Categories.Main:CreateSettingsPane({Name = 'GUI'})
 mainapi.Blur = guipane:CreateToggle({
@@ -8266,9 +8235,6 @@ guipane:CreateButton({
 	Tooltip = 'Sorts GUI'
 })
 
---[[
-	Notification Settings
-]]
 
 local notifpane = mainapi.Categories.Main:CreateSettingsPane({Name = 'Notifications'})
 mainapi.Notifications = notifpane:CreateToggle({
@@ -8296,9 +8262,6 @@ mainapi.GUIColor = mainapi.Categories.Main:CreateGUISlider({
 })
 mainapi.Categories.Main:CreateBind()
 
---[[
-	Text GUI
-]]
 
 local textgui = mainapi:CreateOverlay({
 	Name = 'Text GUI',
@@ -8501,9 +8464,6 @@ textguicolorcustom = textgui:CreateColorSlider({
 	Visible = false
 })
 
---[[
-	Text GUI Objects
-]]
 
 local VapeLabels = {}
 local VapeLogo = Instance.new('ImageLabel')
@@ -8597,9 +8557,6 @@ VapeLabelSorter.VerticalAlignment = Enum.VerticalAlignment.Top
 VapeLabelSorter.SortOrder = Enum.SortOrder.LayoutOrder
 VapeLabelSorter.Parent = VapeLabelHolder
 
---[[
-	Target Info
-]]
 
 local targetinfo
 local targetinfoobj
